@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">AppBlocker</string>
+    <string name="service_label">AppBlocker Accessibility Service</string>
+    <string name="device_admin_label">AppBlocker Device Admin</string>
+    <string name="device_admin_description">Lets AppBlocker act as the supervised-device owner so users cannot uninstall it directly on the phone.</string>
+</resources>
+
