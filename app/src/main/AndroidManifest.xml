@@ -69,6 +69,14 @@
         </receiver>
 
         <receiver
+            android:name=".admin.LaptopReleaseReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.indrajeet.appblocker.action.RELEASE_FOR_UNINSTALL" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
             android:name=".receiver.BootReceiver"
             android:enabled="true"
             android:exported="false">

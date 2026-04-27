@@ -13,6 +13,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -20,20 +23,33 @@ import androidx.compose.ui.unit.dp
 import com.indrajeet.appblocker.ui.theme.AppBlockerTheme
 
 class BlockedActivity : ComponentActivity() {
+    private var reasonText by mutableStateOf("Blocked")
+    private var targetText by mutableStateOf("")
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val reason = intent.getStringExtra(EXTRA_REASON).orEmpty()
-        val target = intent.getStringExtra(EXTRA_TARGET).orEmpty()
+        applyIntent(intent)
 
         setContent {
             AppBlockerTheme {
                 BlockedScreen(
-                    reason = reason,
-                    target = target,
+                    reason = reasonText,
+                    target = targetText,
                     onClose = { moveTaskToBack(true) }
                 )
             }
         }
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        applyIntent(intent)
+    }
+
+    private fun applyIntent(intent: android.content.Intent?) {
+        reasonText = intent?.getStringExtra(EXTRA_REASON).orEmpty().ifBlank { "Blocked" }
+        targetText = intent?.getStringExtra(EXTRA_TARGET).orEmpty()
     }
 
     companion object {
@@ -79,4 +95,3 @@ private fun BlockedScreen(
         }
     }
 }
-

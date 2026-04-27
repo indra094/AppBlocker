@@ -86,6 +86,8 @@ fun HomeScreen(
     var scheduleBucket by remember { mutableStateOf<BlockBucketEntity?>(null) }
     var editingSchedule by remember { mutableStateOf<BlockScheduleEntity?>(null) }
 
+    val openAccessibilityForSetup: () -> Unit = openAccessibilitySettings
+
     Scaffold(
         topBar = {
             TopAppBar(title = { Text("AppBlocker") })
@@ -103,18 +105,9 @@ fun HomeScreen(
                 PermissionCard(
                     accessibilityEnabled = accessibilityEnabled,
                     batteryUnrestricted = batteryUnrestricted,
-                    settingsGuardEnabled = uiState.isSettingsGuardEnabled,
-                    openAccessibilitySettings = openAccessibilitySettings,
+                    openAccessibilitySettings = openAccessibilityForSetup,
                     requestBatteryUnrestricted = requestBatteryUnrestricted,
-                    toggleSettingsGuard = { enabled ->
-                        scope.launch {
-                            runCatching { viewModel.setSettingsGuardEnabled(enabled) }
-                                .onSuccess { snackbarHostState.showSnackbar(it) }
-                                .onFailure { snackbarHostState.showSnackbar(viewModel.toUserMessage(it)) }
-                        }
-                    },
                     requestDeviceAdmin = requestDeviceAdmin,
-                    openDeviceAdminSettings = openDeviceAdminSettings,
                     openManagementDialog = { showManagementDialog = true },
                     isDeviceAdminActive = uiState.isDeviceAdminActive,
                     isDeviceOwner = uiState.isDeviceOwner
@@ -161,8 +154,8 @@ fun HomeScreen(
                 scope.launch {
                     runCatching { viewModel.addBucket(name) }
                         .onSuccess {
-                            snackbarHostState.showSnackbar(it)
                             showBucketDialog = false
+                            snackbarHostState.showSnackbar(it)
                         }
                         .onFailure {
                             snackbarHostState.showSnackbar(viewModel.toUserMessage(it))
@@ -182,7 +175,10 @@ fun HomeScreen(
             onAdd = { app ->
                 scope.launch {
                     runCatching { viewModel.addBlockedApp(bucket, app) }
-                        .onSuccess { snackbarHostState.showSnackbar(it) }
+                        .onSuccess {
+                            appBucket = null
+                            snackbarHostState.showSnackbar(it)
+                        }
                         .onFailure { snackbarHostState.showSnackbar(viewModel.toUserMessage(it)) }
                 }
             }
@@ -197,8 +193,8 @@ fun HomeScreen(
                 scope.launch {
                     runCatching { viewModel.addBlockedSite(bucket, host) }
                         .onSuccess {
-                            snackbarHostState.showSnackbar(it)
                             websiteBucket = null
+                            snackbarHostState.showSnackbar(it)
                         }
                         .onFailure { snackbarHostState.showSnackbar(viewModel.toUserMessage(it)) }
                 }
@@ -224,9 +220,9 @@ fun HomeScreen(
                         }
                     }
                     outcome.onSuccess {
-                        snackbarHostState.showSnackbar(it)
                         scheduleBucket = null
                         editingSchedule = null
+                        snackbarHostState.showSnackbar(it)
                     }.onFailure {
                         snackbarHostState.showSnackbar(viewModel.toUserMessage(it))
                     }
@@ -241,7 +237,7 @@ fun HomeScreen(
             isDeviceOwner = uiState.isDeviceOwner,
             onDismiss = { showManagementDialog = false },
             requestDeviceAdmin = requestDeviceAdmin,
-            openAccessibilitySettings = openAccessibilitySettings,
+            openAccessibilitySettings = openAccessibilityForSetup,
             openDeviceAdminSettings = openDeviceAdminSettings
         )
     }
@@ -251,7 +247,7 @@ fun HomeScreen(
             accessibilityEnabled = accessibilityEnabled,
             batteryUnrestricted = batteryUnrestricted,
             onDismiss = { showReliabilityDialog = false },
-            openAccessibilitySettings = openAccessibilitySettings,
+            openAccessibilitySettings = openAccessibilityForSetup,
             requestBatteryUnrestricted = requestBatteryUnrestricted
         )
     }
@@ -261,12 +257,9 @@ fun HomeScreen(
 private fun PermissionCard(
     accessibilityEnabled: Boolean,
     batteryUnrestricted: Boolean,
-    settingsGuardEnabled: Boolean,
     openAccessibilitySettings: () -> Unit,
     requestBatteryUnrestricted: () -> Unit,
-    toggleSettingsGuard: (Boolean) -> Unit,
     requestDeviceAdmin: () -> Unit,
-    openDeviceAdminSettings: () -> Unit,
     openManagementDialog: () -> Unit,
     isDeviceAdminActive: Boolean,
     isDeviceOwner: Boolean
@@ -324,37 +317,24 @@ private fun PermissionCard(
             OutlinedButton(onClick = requestBatteryUnrestricted) {
                 Text(if (batteryUnrestricted) "Review battery settings" else "Set battery to unrestricted")
             }
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Lock,
-                    contentDescription = null,
-                    modifier = Modifier.size(24.dp)
-                )
-                Column {
-                    Text("Device settings guard", fontWeight = FontWeight.Bold)
-                    Text(
-                        if (settingsGuardEnabled) {
-                            "Enabled. App will block opening system Settings."
-                        } else {
-                            "Disabled. Turn on to block system Settings access."
-                        }
-                    )
-                }
-            }
-            Button(onClick = { toggleSettingsGuard(!settingsGuardEnabled) }) {
-                Text(if (settingsGuardEnabled) "Disable settings guard" else "Enable settings guard")
-            }
+            Text("Management protection", fontWeight = FontWeight.Bold)
+            Text(
+                if (isDeviceAdminActive && accessibilityEnabled) {
+                    "Active. AppBlocker automatically blocks settings screens that can disable AppBlocker admin or uninstall paths."
+                } else {
+                    "Pending. Enable both accessibility and device admin to activate automatic management protection."
+                },
+                style = MaterialTheme.typography.bodySmall
+            )
             if (!isDeviceAdminActive) {
                 Button(onClick = requestDeviceAdmin) {
                     Text("Enable device admin")
                 }
             } else {
-                OutlinedButton(onClick = openDeviceAdminSettings) {
-                    Text("Open security settings")
-                }
+                Text(
+                    "Device admin is enabled and protected. Disabling it from settings is blocked by policy.",
+                    style = MaterialTheme.typography.bodySmall
+                )
             }
             Text(
                 if (isDeviceOwner) {
@@ -467,20 +447,29 @@ private fun ManagementSetupDialog(
                     },
                     style = MaterialTheme.typography.bodySmall
                 )
-                Button(onClick = requestDeviceAdmin, modifier = Modifier.fillMaxWidth()) {
-                    Text(if (isDeviceAdminActive) "Review device admin prompt" else "Enable device admin")
+                if (!isDeviceAdminActive) {
+                    Button(onClick = requestDeviceAdmin, modifier = Modifier.fillMaxWidth()) {
+                        Text("Enable device admin")
+                    }
+                }
+                if (isDeviceAdminActive) {
+                    Text(
+                        "Device admin disable screens are blocked while protection is active.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                } else {
+                    OutlinedButton(
+                        onClick = openDeviceAdminSettings,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Open security settings")
+                    }
                 }
                 OutlinedButton(
                     onClick = openAccessibilitySettings,
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text("Open accessibility settings")
-                }
-                OutlinedButton(
-                    onClick = openDeviceAdminSettings,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text("Open security settings")
                 }
                 Text(
                     "For dedicated supervised devices, finish setup from the laptop with scripts\\provision-device-owner.ps1. That path depends on Android's device-owner rules, which usually require a freshly reset device.",

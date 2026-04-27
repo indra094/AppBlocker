@@ -4,6 +4,15 @@ plugins {
     id("com.google.devtools.ksp")
 }
 
+fun escapeForBuildConfig(value: String): String {
+    return value.replace("\\", "\\\\").replace("\"", "\\\"")
+}
+
+val laptopReleaseTokenRaw =
+    (project.findProperty("appblockerLaptopReleaseToken") as String?)
+        ?: "CHANGE_ME_APPBLOCKER_RELEASE_TOKEN"
+val laptopReleaseToken = escapeForBuildConfig(laptopReleaseTokenRaw)
+
 android {
     namespace = "com.indrajeet.appblocker"
     compileSdk = 34
@@ -14,6 +23,7 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
+        buildConfigField("String", "LAPTOP_RELEASE_TOKEN", "\"$laptopReleaseToken\"")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -42,6 +52,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     composeOptions {

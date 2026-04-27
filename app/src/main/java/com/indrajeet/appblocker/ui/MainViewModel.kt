@@ -19,15 +19,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 data class HomeUiState(
     val buckets: List<BucketDetails> = emptyList(),
     val installedApps: List<InstalledApp> = emptyList(),
-    val isSettingsGuardEnabled: Boolean = false,
     val isDeviceAdminActive: Boolean = false,
     val isDeviceOwner: Boolean = false
 )
@@ -35,21 +34,18 @@ data class HomeUiState(
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = (application as AppBlockerApplication).repository
     private val installedApps = MutableStateFlow<List<InstalledApp>>(emptyList())
-    private val settingsGuardState = MutableStateFlow(repository.isSettingsGuardEnabled())
     private val deviceAdminState = MutableStateFlow(isCurrentAppDeviceAdmin(application))
     private val deviceOwnerState = MutableStateFlow(isCurrentAppDeviceOwner(application))
 
     val uiState: StateFlow<HomeUiState> = combine(
         repository.observeBucketDetails(),
         installedApps,
-        settingsGuardState,
         deviceAdminState,
         deviceOwnerState
-    ) { buckets, apps, isSettingsGuardEnabled, isDeviceAdminActive, isDeviceOwner ->
+    ) { buckets, apps, isDeviceAdminActive, isDeviceOwner ->
         HomeUiState(
             buckets = buckets,
             installedApps = apps,
-            isSettingsGuardEnabled = isSettingsGuardEnabled,
             isDeviceAdminActive = isDeviceAdminActive,
             isDeviceOwner = isDeviceOwner
         )
@@ -64,8 +60,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             installedApps.value = InstalledAppScanner.scan(getApplication())
         }
         viewModelScope.launch {
-            repository.observeSettingsGuardEnabled().collect {
-                settingsGuardState.value = it
+            while (true) {
+                refreshManagementState()
+                delay(1_500)
             }
         }
     }
@@ -103,16 +100,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         return "Blocking window extended."
     }
 
-    suspend fun setSettingsGuardEnabled(enabled: Boolean): String {
-        repository.setSettingsGuardEnabled(enabled)
-        enforceSupervisedPolicies()
-        return if (enabled) {
-            "Device settings blocking enabled."
-        } else {
-            "Device settings blocking disabled."
-        }
-    }
-
     fun toUserMessage(error: Throwable): String {
         return when (error) {
             is PolicyViolationException -> error.message ?: "That change is not allowed."
@@ -137,12 +124,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         // Best-effort hardening when running as official device owner.
         runCatching { manager.setUninstallBlocked(admin, application.packageName, true) }
-        runCatching { manager.addUserRestriction(admin, UserManager.DISALLOW_APPS_CONTROL) }
-        if (repository.isSettingsGuardEnabled()) {
-            runCatching { manager.addUserRestriction(admin, USER_RESTRICTION_NO_CONFIG_SETTINGS) }
-        } else {
-            runCatching { manager.clearUserRestriction(admin, USER_RESTRICTION_NO_CONFIG_SETTINGS) }
-        }
+        runCatching { manager.clearUserRestriction(admin, UserManager.DISALLOW_APPS_CONTROL) }
+        runCatching { manager.clearUserRestriction(admin, USER_RESTRICTION_NO_CONFIG_SETTINGS) }
     }
 
     companion object {
