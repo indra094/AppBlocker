@@ -73,7 +73,21 @@ class BlockAccessibilityService : AccessibilityService() {
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        val packageName = event?.packageName?.toString() ?: return
+        val currentEvent = event ?: return
+        val eventType = currentEvent.eventType
+        if (eventType == AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED) {
+            return
+        }
+        val packageName = currentEvent.packageName?.toString() ?: return
+        val isWindowChangeEvent =
+            eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED ||
+                eventType == AccessibilityEvent.TYPE_WINDOWS_CHANGED
+        val isBrowserContentEvent =
+            eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED &&
+                packageName in BrowserSupport.browserAddressBars.keys
+        if (!isWindowChangeEvent && !isBrowserContentEvent) {
+            return
+        }
         if (packageName == this.packageName) {
             return
         }
@@ -92,7 +106,12 @@ class BlockAccessibilityService : AccessibilityService() {
     private fun evaluateCurrentContext() {
         val activePackage = currentPackage ?: return
         if (activePackage in settingsPackages && isProtectedSelfManagementScreen()) {
-            triggerBlock("Protected setting blocked", activePackage)
+            triggerBlock(
+                reason = "Protected setting blocked",
+                target = activePackage,
+                forceHome = true,
+                minIntervalMs = 0
+            )
             return
         }
         val snapshot = ruleSnapshot
@@ -103,7 +122,13 @@ class BlockAccessibilityService : AccessibilityService() {
 
         val appBucket = RuleEvaluator.activeBucketForPackage(snapshot, activePackage, now)
         if (appBucket != null) {
-            triggerBlock("Blocked by ${appBucket.bucketName}", activePackage)
+            triggerBlock(
+                reason = "Blocked by ${appBucket.bucketName}",
+                target = activePackage,
+                forceHome = true,
+                minIntervalMs = 0,
+                showBlockedScreen = false
+            )
             return
         }
 
@@ -112,7 +137,12 @@ class BlockAccessibilityService : AccessibilityService() {
             val hostMatch = RuleEvaluator.activeBucketForHost(snapshot, host, now) ?: return
             if (hostMatch.second == SAFE_REDIRECT_HOST) {
                 // Avoid redirect loops if safe URL itself is blocked.
-                triggerBlock("Blocked by ${hostMatch.first.bucketName}", hostMatch.second)
+                triggerBlock(
+                    reason = "Blocked by ${hostMatch.first.bucketName}",
+                    target = hostMatch.second,
+                    forceHome = true,
+                    minIntervalMs = 1_000
+                )
                 return
             }
             redirectBlockedWebsite(
@@ -278,14 +308,27 @@ class BlockAccessibilityService : AccessibilityService() {
         }
     }
 
-    private fun triggerBlock(reason: String, target: String) {
+    private fun triggerBlock(
+        reason: String,
+        target: String,
+        forceHome: Boolean = false,
+        minIntervalMs: Long = 2_000,
+        showBlockedScreen: Boolean = true
+    ) {
         val now = System.currentTimeMillis()
         val key = "$reason::$target"
-        if (key == lastShownKey && now - lastShownAt < 2_000) {
+        if (key == lastShownKey && now - lastShownAt < minIntervalMs) {
             return
         }
         lastShownKey = key
         lastShownAt = now
+
+        if (forceHome) {
+            performGlobalAction(GLOBAL_ACTION_HOME)
+        }
+        if (!showBlockedScreen) {
+            return
+        }
 
         val intent = Intent(this, BlockedActivity::class.java).apply {
             addFlags(

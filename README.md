@@ -12,6 +12,8 @@
 - Blocks selected apps when a blocking window is active by using an `AccessibilityService`.
 - Blocks selected websites in supported browsers by reading the visible address bar through the same accessibility service.
 - Redirects blocked website hits to `https://github.com` instead of force-closing the browser.
+- Silences WhatsApp / WhatsApp Business notifications during active WhatsApp app-block windows when Notification Access is enabled.
+- Shows a weekly screen-time tracker when Usage Access is enabled.
 - Stores rules locally with Room.
 - Treats targets as append-only.
 - Treats schedules as append-only or expandable-only.
@@ -37,6 +39,8 @@ This only works on a device that is freshly reset or otherwise meets Android's d
 2. Open AppBlocker and enable:
    - Accessibility service for AppBlocker
    - Battery mode as **Unrestricted**
+   - Notification access for AppBlocker (needed for WhatsApp notification silencing)
+   - Usage access for AppBlocker (needed for weekly screen-time totals)
 3. Create at least one bucket.
 4. Inside that bucket, add:
    - one or more apps and/or domains
@@ -48,6 +52,16 @@ If a domain is not blocked, the most common causes are:
 - battery optimization is still enabled
 - the domain is not in the same active bucket/time window
 - browser URL extraction did not expose the host in that specific browser build
+
+If WhatsApp notifications are not silenced during block windows, the most common causes are:
+
+- notification access is off
+- WhatsApp is not added as a blocked app in an active bucket/time window
+
+If weekly screen time is empty, the most common causes are:
+
+- usage access is off
+- there has not been enough recorded device usage yet during the current week
 
 ## Block device settings
 
@@ -87,6 +101,12 @@ The project is configured for:
 - Gradle 8.6
 - Android SDK Platform 34 / Build Tools 34.0.0
 
+If you see this warning during build:
+
+- `Warning: SDK processing. This version only understands SDK XML versions up to 3 but an SDK XML file of version 4 was encountered.`
+
+it usually means Android Studio and the Android command-line SDK tools are from different release times. The APK can still build, but updating the command-line tools is recommended.
+
 ## Debugging steps
 
 0. One-time machine check:
@@ -94,6 +114,7 @@ The project is configured for:
    - if missing, install JDK 17 and set `JAVA_HOME` to that JDK path
 1. Build debug APK:
    - `scripts/build-debug.ps1`
+   - this uses Gradle `--no-daemon` to avoid false daemon-dispatch failures after a successful build
 2. Install on connected phone:
    - `scripts/install.ps1`
 3. Keep AppBlocker process logs open while testing:

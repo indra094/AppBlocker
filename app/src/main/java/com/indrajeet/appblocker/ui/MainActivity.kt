@@ -60,6 +60,20 @@ class MainActivity : ComponentActivity() {
                             failureMessage = "Couldn't open device admin setup settings."
                         )
                     },
+                    openNotificationAccessSettings = {
+                        launchSettingsSafely(
+                            primary = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS),
+                            fallback = Intent(Settings.ACTION_SETTINGS),
+                            failureMessage = "Couldn't open notification access settings."
+                        )
+                    },
+                    openUsageAccessSettings = {
+                        launchSettingsSafely(
+                            primary = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS),
+                            fallback = Intent(Settings.ACTION_SETTINGS),
+                            failureMessage = "Couldn't open usage access settings."
+                        )
+                    },
                     openDeviceAdminSettings = {
                         launchSettingsSafely(
                             primary = Intent(Settings.ACTION_SECURITY_SETTINGS),
@@ -75,6 +89,7 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         viewModel.refreshManagementState()
+        viewModel.refreshWeeklyUsage()
         viewModel.enforceSupervisedPolicies()
     }
 

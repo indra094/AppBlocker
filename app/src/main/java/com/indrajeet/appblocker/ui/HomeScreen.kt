@@ -55,9 +55,12 @@ import com.indrajeet.appblocker.data.BlockScheduleEntity
 import com.indrajeet.appblocker.data.BucketDetails
 import com.indrajeet.appblocker.data.ScheduleDraft
 import com.indrajeet.appblocker.service.BlockAccessibilityService
+import com.indrajeet.appblocker.service.BlockNotificationListenerService
 import com.indrajeet.appblocker.util.DayMask
 import com.indrajeet.appblocker.util.InstalledApp
+import com.indrajeet.appblocker.util.ScreenTimeTracker
 import com.indrajeet.appblocker.util.ScheduleFormatter
+import com.indrajeet.appblocker.util.WeeklyUsageSummary
 import java.time.DayOfWeek
 import java.time.LocalDate
 import kotlinx.coroutines.launch
@@ -69,6 +72,8 @@ fun HomeScreen(
     openAccessibilitySettings: () -> Unit,
     requestBatteryUnrestricted: () -> Unit,
     requestDeviceAdmin: () -> Unit,
+    openNotificationAccessSettings: () -> Unit,
+    openUsageAccessSettings: () -> Unit,
     openDeviceAdminSettings: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -77,10 +82,13 @@ fun HomeScreen(
     val context = LocalContext.current
     val accessibilityEnabled = context.isAccessibilityServiceEnabled()
     val batteryUnrestricted = context.isBatteryUnrestricted()
+    val notificationAccessEnabled = context.isNotificationListenerEnabled()
+    val usageAccessEnabled = context.isUsageAccessEnabled()
 
     var showBucketDialog by rememberSaveable { mutableStateOf(false) }
     var showManagementDialog by rememberSaveable { mutableStateOf(false) }
     var showReliabilityDialog by rememberSaveable { mutableStateOf(true) }
+    var showWeeklyUsageDialog by rememberSaveable { mutableStateOf(false) }
     var appBucket by remember { mutableStateOf<BlockBucketEntity?>(null) }
     var websiteBucket by remember { mutableStateOf<BlockBucketEntity?>(null) }
     var scheduleBucket by remember { mutableStateOf<BlockBucketEntity?>(null) }
@@ -105,9 +113,14 @@ fun HomeScreen(
                 PermissionCard(
                     accessibilityEnabled = accessibilityEnabled,
                     batteryUnrestricted = batteryUnrestricted,
+                    notificationAccessEnabled = notificationAccessEnabled,
+                    usageAccessEnabled = usageAccessEnabled,
                     openAccessibilitySettings = openAccessibilityForSetup,
                     requestBatteryUnrestricted = requestBatteryUnrestricted,
                     requestDeviceAdmin = requestDeviceAdmin,
+                    openNotificationAccessSettings = openNotificationAccessSettings,
+                    openUsageAccessSettings = openUsageAccessSettings,
+                    onShowWeeklyUsage = { showWeeklyUsageDialog = true },
                     openManagementDialog = { showManagementDialog = true },
                     isDeviceAdminActive = uiState.isDeviceAdminActive,
                     isDeviceOwner = uiState.isDeviceOwner
@@ -251,15 +264,27 @@ fun HomeScreen(
             requestBatteryUnrestricted = requestBatteryUnrestricted
         )
     }
+
+    if (showWeeklyUsageDialog) {
+        WeeklyUsageDialog(
+            weeklyUsage = uiState.weeklyUsage,
+            onDismiss = { showWeeklyUsageDialog = false }
+        )
+    }
 }
 
 @Composable
 private fun PermissionCard(
     accessibilityEnabled: Boolean,
     batteryUnrestricted: Boolean,
+    notificationAccessEnabled: Boolean,
+    usageAccessEnabled: Boolean,
     openAccessibilitySettings: () -> Unit,
     requestBatteryUnrestricted: () -> Unit,
     requestDeviceAdmin: () -> Unit,
+    openNotificationAccessSettings: () -> Unit,
+    openUsageAccessSettings: () -> Unit,
+    onShowWeeklyUsage: () -> Unit,
     openManagementDialog: () -> Unit,
     isDeviceAdminActive: Boolean,
     isDeviceOwner: Boolean
@@ -317,6 +342,57 @@ private fun PermissionCard(
             OutlinedButton(onClick = requestBatteryUnrestricted) {
                 Text(if (batteryUnrestricted) "Review battery settings" else "Set battery to unrestricted")
             }
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Lock,
+                    contentDescription = null,
+                    modifier = Modifier.size(24.dp)
+                )
+                Column {
+                    Text("Notification access (WhatsApp silence)", fontWeight = FontWeight.Bold)
+                    Text(
+                        if (notificationAccessEnabled) {
+                            "Enabled. WhatsApp notifications can be silenced during active WhatsApp block windows."
+                        } else {
+                            "Enable notification access so AppBlocker can cancel WhatsApp notifications during active WhatsApp block windows."
+                        }
+                    )
+                }
+            }
+            OutlinedButton(onClick = openNotificationAccessSettings) {
+                Text(if (notificationAccessEnabled) "Review notification access" else "Enable notification access")
+            }
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Lock,
+                    contentDescription = null,
+                    modifier = Modifier.size(24.dp)
+                )
+                Column {
+                    Text("Usage access (weekly screen time)", fontWeight = FontWeight.Bold)
+                    Text(
+                        if (usageAccessEnabled) {
+                            "Enabled. Weekly screen-time totals can be shown inside AppBlocker."
+                        } else {
+                            "Enable usage access so AppBlocker can show weekly screen-time totals."
+                        }
+                    )
+                }
+            }
+            OutlinedButton(onClick = openUsageAccessSettings) {
+                Text(if (usageAccessEnabled) "Review usage access" else "Enable usage access")
+            }
+            if (usageAccessEnabled) {
+                OutlinedButton(onClick = onShowWeeklyUsage) {
+                    Text("View weekly screen time")
+                }
+            }
             Text("Management protection", fontWeight = FontWeight.Bold)
             Text(
                 if (isDeviceAdminActive && accessibilityEnabled) {
@@ -351,6 +427,63 @@ private fun PermissionCard(
             }
         }
     }
+}
+
+@Composable
+private fun WeeklyUsageDialog(
+    weeklyUsage: List<WeeklyUsageSummary>,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Close")
+            }
+        },
+        title = {
+            Text("Weekly Screen Time")
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 420.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    "Weekly totals are shown in hours for each week.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+
+                if (weeklyUsage.isEmpty()) {
+                    Text(
+                        "No screen-time usage recorded yet.",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                } else {
+                    LazyColumn(
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(weeklyUsage, key = { it.label }) { entry ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    entry.label,
+                                    modifier = Modifier.weight(1f),
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(formatHours(entry.totalTimeMs), style = MaterialTheme.typography.bodyMedium)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    )
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -881,4 +1014,24 @@ private fun Context.isAccessibilityServiceEnabled(): Boolean {
 private fun Context.isBatteryUnrestricted(): Boolean {
     val powerManager = getSystemService(PowerManager::class.java) ?: return true
     return powerManager.isIgnoringBatteryOptimizations(packageName)
+}
+
+private fun Context.isNotificationListenerEnabled(): Boolean {
+    val enabledListeners = Settings.Secure.getString(
+        contentResolver,
+        "enabled_notification_listeners"
+    ).orEmpty()
+    return enabledListeners.contains(
+        "$packageName/${BlockNotificationListenerService::class.java.name}",
+        ignoreCase = true
+    )
+}
+
+private fun Context.isUsageAccessEnabled(): Boolean {
+    return ScreenTimeTracker.hasUsageAccess(this)
+}
+
+private fun formatHours(totalMs: Long): String {
+    val hours = totalMs / 3_600_000.0
+    return String.format("%.1f h", hours)
 }

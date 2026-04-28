@@ -1,5 +1,6 @@
 package com.indrajeet.appblocker.ui
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -35,7 +36,15 @@ class BlockedActivity : ComponentActivity() {
                 BlockedScreen(
                     reason = reasonText,
                     target = targetText,
-                    onClose = { moveTaskToBack(true) }
+                    onClose = {
+                        startActivity(
+                            Intent(Intent.ACTION_MAIN).apply {
+                                addCategory(Intent.CATEGORY_HOME)
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            }
+                        )
+                        finish()
+                    }
                 )
             }
         }
@@ -90,7 +99,7 @@ private fun BlockedScreen(
                 style = MaterialTheme.typography.bodyMedium
             )
             Button(onClick = onClose, modifier = Modifier.padding(top = 20.dp)) {
-                Text("Close")
+                Text("Go Home")
             }
         }
     }

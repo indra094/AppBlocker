@@ -15,6 +15,8 @@ import com.indrajeet.appblocker.data.PolicyViolationException
 import com.indrajeet.appblocker.data.ScheduleDraft
 import com.indrajeet.appblocker.util.InstalledApp
 import com.indrajeet.appblocker.util.InstalledAppScanner
+import com.indrajeet.appblocker.util.ScreenTimeTracker
+import com.indrajeet.appblocker.util.WeeklyUsageSummary
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -27,6 +29,7 @@ import kotlinx.coroutines.launch
 data class HomeUiState(
     val buckets: List<BucketDetails> = emptyList(),
     val installedApps: List<InstalledApp> = emptyList(),
+    val weeklyUsage: List<WeeklyUsageSummary> = emptyList(),
     val isDeviceAdminActive: Boolean = false,
     val isDeviceOwner: Boolean = false
 )
@@ -34,18 +37,21 @@ data class HomeUiState(
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val repository = (application as AppBlockerApplication).repository
     private val installedApps = MutableStateFlow<List<InstalledApp>>(emptyList())
+    private val weeklyUsageState = MutableStateFlow<List<WeeklyUsageSummary>>(emptyList())
     private val deviceAdminState = MutableStateFlow(isCurrentAppDeviceAdmin(application))
     private val deviceOwnerState = MutableStateFlow(isCurrentAppDeviceOwner(application))
 
     val uiState: StateFlow<HomeUiState> = combine(
         repository.observeBucketDetails(),
         installedApps,
+        weeklyUsageState,
         deviceAdminState,
         deviceOwnerState
-    ) { buckets, apps, isDeviceAdminActive, isDeviceOwner ->
+    ) { buckets, apps, weeklyUsage, isDeviceAdminActive, isDeviceOwner ->
         HomeUiState(
             buckets = buckets,
             installedApps = apps,
+            weeklyUsage = weeklyUsage,
             isDeviceAdminActive = isDeviceAdminActive,
             isDeviceOwner = isDeviceOwner
         )
@@ -58,11 +64,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     init {
         viewModelScope.launch(Dispatchers.IO) {
             installedApps.value = InstalledAppScanner.scan(getApplication())
+            refreshWeeklyUsage()
         }
         viewModelScope.launch {
             while (true) {
                 refreshManagementState()
                 delay(1_500)
+            }
+        }
+        viewModelScope.launch {
+            while (true) {
+                refreshWeeklyUsage()
+                delay(60_000)
             }
         }
     }
@@ -112,6 +125,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val application = getApplication<Application>()
         deviceAdminState.value = isCurrentAppDeviceAdmin(application)
         deviceOwnerState.value = isCurrentAppDeviceOwner(application)
+    }
+
+    fun refreshWeeklyUsage() {
+        val application = getApplication<Application>()
+        viewModelScope.launch(Dispatchers.IO) {
+            weeklyUsageState.value = ScreenTimeTracker.loadWeeklyUsage(context = application)
+        }
     }
 
     fun enforceSupervisedPolicies() {

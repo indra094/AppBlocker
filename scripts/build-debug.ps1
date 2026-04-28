@@ -1,4 +1,4 @@
 $ErrorActionPreference = "Stop"
 
 Set-Location $PSScriptRoot\..
-.\gradlew.bat assembleDebug
+.\gradlew.bat --no-daemon assembleDebug
