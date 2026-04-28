@@ -1,18 +1,24 @@
 package com.indrajeet.appblocker.ui
 
 import android.content.Context
+import androidx.compose.foundation.background
+import androidx.compose.foundation.Canvas
 import android.os.PowerManager
 import android.provider.Settings
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -45,10 +51,17 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.indrajeet.appblocker.data.BlockBucketEntity
 import com.indrajeet.appblocker.data.BlockScheduleEntity
@@ -63,7 +76,18 @@ import com.indrajeet.appblocker.util.ScheduleFormatter
 import com.indrajeet.appblocker.util.WeeklyUsageSummary
 import java.time.DayOfWeek
 import java.time.LocalDate
+import kotlin.math.max
 import kotlinx.coroutines.launch
+
+private enum class UsageGraphMode {
+    Line,
+    Bars
+}
+
+private data class MonthMarker(
+    val index: Int,
+    val label: String
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -434,56 +458,261 @@ private fun WeeklyUsageDialog(
     weeklyUsage: List<WeeklyUsageSummary>,
     onDismiss: () -> Unit
 ) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Close")
-            }
-        },
-        title = {
-            Text("Weekly Screen Time")
-        },
-        text = {
+    val listUsage = weeklyUsage
+    val graphUsage = weeklyUsage.asReversed()
+    val maxMs = weeklyUsage.maxOfOrNull { it.totalTimeMs } ?: 0L
+    var graphMode by rememberSaveable { mutableStateOf(UsageGraphMode.Line.name) }
+
+    Dialog(onDismissRequest = onDismiss) {
+        ElevatedCard(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 680.dp)
+        ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = 420.dp),
+                    .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Text(
-                    "Weekly totals are shown in hours for each week.",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-
-                if (weeklyUsage.isEmpty()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Text(
-                        "No screen-time usage recorded yet.",
-                        style = MaterialTheme.typography.bodyMedium
+                        "Past 52 Weeks Screen Time",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
                     )
-                } else {
-                    LazyColumn(
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        items(weeklyUsage, key = { it.label }) { entry ->
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    entry.label,
-                                    modifier = Modifier.weight(1f),
-                                    fontWeight = FontWeight.Bold
+                    TextButton(onClick = onDismiss) {
+                        Text("Close")
+                    }
+                }
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    item {
+                        Text(
+                            "See weekly usage as a compact graph. The chart runs oldest to newest from left to right, and the exact totals are listed below.",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                    if (listUsage.isEmpty()) {
+                        item {
+                            Text(
+                                "No screen-time usage recorded yet.",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                    } else {
+                        item {
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                FilterChip(
+                                    selected = graphMode == UsageGraphMode.Line.name,
+                                    onClick = { graphMode = UsageGraphMode.Line.name },
+                                    label = { Text("Line") }
                                 )
-                                Text(formatHours(entry.totalTimeMs), style = MaterialTheme.typography.bodyMedium)
+                                FilterChip(
+                                    selected = graphMode == UsageGraphMode.Bars.name,
+                                    onClick = { graphMode = UsageGraphMode.Bars.name },
+                                    label = { Text("Bars") }
+                                )
                             }
+                        }
+                        item {
+                            WeeklyUsageGraph(
+                                weeklyUsage = graphUsage,
+                                maxMs = maxMs,
+                                mode = if (graphMode == UsageGraphMode.Bars.name) {
+                                    UsageGraphMode.Bars
+                                } else {
+                                    UsageGraphMode.Line
+                                }
+                            )
+                        }
+                        item {
+                            MonthMarkerStrip(weeklyUsage = graphUsage)
+                        }
+                        item {
+                            Text(
+                                "Exact weekly totals (most recent first)",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        items(listUsage, key = { it.label }) { entry ->
+                            WeeklyUsageListRow(entry = entry)
                         }
                     }
                 }
             }
         }
-    )
+    }
+}
+
+@Composable
+private fun WeeklyUsageGraph(
+    weeklyUsage: List<WeeklyUsageSummary>,
+    maxMs: Long,
+    mode: UsageGraphMode
+) {
+    val monthMarkers = remember(weeklyUsage) { buildMonthMarkers(weeklyUsage) }
+    val strokeColor = MaterialTheme.colorScheme.primary
+    val markerColor = MaterialTheme.colorScheme.outlineVariant
+
+    Canvas(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(180.dp)
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+    ) {
+        if (weeklyUsage.isEmpty()) {
+            return@Canvas
+        }
+
+        val chartWidth = size.width
+        val chartHeight = size.height
+        val denominator = max(1, weeklyUsage.lastIndex)
+
+        monthMarkers.forEach { marker ->
+            val x = chartWidth * (marker.index.toFloat() / denominator.toFloat())
+            drawLine(
+                color = markerColor,
+                start = Offset(x, 0f),
+                end = Offset(x, chartHeight),
+                strokeWidth = 1.dp.toPx()
+            )
+        }
+
+        drawLine(
+            color = markerColor,
+            start = Offset(0f, chartHeight),
+            end = Offset(chartWidth, chartHeight),
+            strokeWidth = 1.dp.toPx()
+        )
+
+        if (mode == UsageGraphMode.Bars) {
+            val step = chartWidth / weeklyUsage.size.toFloat()
+            val barWidth = step * 0.72f
+            weeklyUsage.forEachIndexed { index, entry ->
+                val fraction = if (maxMs > 0L) {
+                    (entry.totalTimeMs.toFloat() / maxMs.toFloat()).coerceIn(0f, 1f)
+                } else {
+                    0f
+                }
+                val barHeight = chartHeight * fraction
+                val left = (index * step) + ((step - barWidth) / 2f)
+                drawRect(
+                    color = strokeColor,
+                    topLeft = Offset(left, chartHeight - barHeight),
+                    size = Size(barWidth, barHeight)
+                )
+            }
+        } else {
+            val path = Path()
+            weeklyUsage.forEachIndexed { index, entry ->
+                val fraction = if (maxMs > 0L) {
+                    (entry.totalTimeMs.toFloat() / maxMs.toFloat()).coerceIn(0f, 1f)
+                } else {
+                    0f
+                }
+                val x = chartWidth * (index.toFloat() / denominator.toFloat())
+                val y = chartHeight - (chartHeight * fraction)
+                if (index == 0) {
+                    path.moveTo(x, y)
+                } else {
+                    path.lineTo(x, y)
+                }
+            }
+            drawPath(
+                path = path,
+                color = strokeColor,
+                style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
+            )
+            weeklyUsage.forEachIndexed { index, entry ->
+                val fraction = if (maxMs > 0L) {
+                    (entry.totalTimeMs.toFloat() / maxMs.toFloat()).coerceIn(0f, 1f)
+                } else {
+                    0f
+                }
+                val x = chartWidth * (index.toFloat() / denominator.toFloat())
+                val y = chartHeight - (chartHeight * fraction)
+                drawCircle(
+                    color = strokeColor,
+                    radius = 3.5.dp.toPx(),
+                    center = Offset(x, y)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun MonthMarkerStrip(
+    weeklyUsage: List<WeeklyUsageSummary>
+) {
+    val monthMarkers = remember(weeklyUsage) { buildMonthMarkers(weeklyUsage) }
+    BoxWithConstraints(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(18.dp)
+    ) {
+        val width = maxWidth
+        val denominator = max(1, weeklyUsage.lastIndex)
+        monthMarkers.forEach { marker ->
+            val rawOffset = width * (marker.index.toFloat() / denominator.toFloat())
+            val x = clampMarkerOffset(rawOffset, width)
+            Text(
+                text = marker.label,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .offset(x = x),
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
+    }
+}
+
+@Composable
+private fun WeeklyUsageListRow(
+    entry: WeeklyUsageSummary
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            entry.label,
+            modifier = Modifier.weight(1f),
+            fontWeight = FontWeight.Bold
+        )
+        Text(formatHours(entry.totalTimeMs), style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
+private fun buildMonthMarkers(weeklyUsage: List<WeeklyUsageSummary>): List<MonthMarker> {
+    var previousMonth: String? = null
+    return weeklyUsage.mapIndexedNotNull { index, entry ->
+        val currentMonth = entry.label.substringBefore(' ')
+        if (currentMonth == previousMonth) {
+            null
+        } else {
+            previousMonth = currentMonth
+            MonthMarker(index = index, label = currentMonth)
+        }
+    }
+}
+
+private fun clampMarkerOffset(rawOffset: Dp, width: Dp): Dp {
+    val labelHalfWidth = 12.dp
+    val maxOffset = if (width > 28.dp) width - 28.dp else 0.dp
+    return when {
+        rawOffset < labelHalfWidth -> 0.dp
+        rawOffset > maxOffset -> maxOffset
+        else -> rawOffset - labelHalfWidth
+    }
 }
 
 @OptIn(ExperimentalLayoutApi::class)

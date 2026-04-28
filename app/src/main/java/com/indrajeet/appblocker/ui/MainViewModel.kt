@@ -23,7 +23,6 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 data class HomeUiState(
@@ -65,18 +64,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch(Dispatchers.IO) {
             installedApps.value = InstalledAppScanner.scan(getApplication())
             refreshWeeklyUsage()
-        }
-        viewModelScope.launch {
-            while (true) {
-                refreshManagementState()
-                delay(1_500)
-            }
-        }
-        viewModelScope.launch {
-            while (true) {
-                refreshWeeklyUsage()
-                delay(60_000)
-            }
         }
     }
 

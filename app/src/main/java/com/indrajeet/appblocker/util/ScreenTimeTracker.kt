@@ -40,42 +40,36 @@ object ScreenTimeTracker {
             .with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
             .toLocalDate()
             .atStartOfDay(now.zone)
-        val firstWeekStart = currentWeekStart.minusWeeks(WEEK_HISTORY_COUNT - 1)
-        val usageStats = usageStatsManager.queryUsageStats(
-            UsageStatsManager.INTERVAL_DAILY,
-            firstWeekStart.toInstant().toEpochMilli(),
-            now.toInstant().toEpochMilli()
-        )
-
-        val totalsByWeekStart = mutableMapOf<ZonedDateTime, Long>()
-        usageStats.forEach { stat ->
-            val lastTimeUsed = stat.lastTimeUsed
-            if (lastTimeUsed <= 0L || stat.totalTimeInForeground <= 0L) {
-                return@forEach
-            }
-            val weekStart = ZonedDateTime
-                .ofInstant(java.time.Instant.ofEpochMilli(lastTimeUsed), now.zone)
-                .with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
-                .toLocalDate()
-                .atStartOfDay(now.zone)
-
-            if (weekStart.isBefore(firstWeekStart) || weekStart.isAfter(currentWeekStart)) {
-                return@forEach
-            }
-
-            totalsByWeekStart[weekStart] = (totalsByWeekStart[weekStart] ?: 0L) + stat.totalTimeInForeground
-        }
 
         val formatter = DateTimeFormatter.ofPattern("MMM d")
         return (0 until WEEK_HISTORY_COUNT)
             .map { index -> currentWeekStart.minusWeeks(index) }
             .map { weekStart ->
                 val weekEnd = weekStart.plusDays(6)
+                val intervalEnd = if (indexOfWeek(weekStart, currentWeekStart) == 0L) {
+                    now
+                } else {
+                    weekStart.plusWeeks(1)
+                }
+                val totalMs = usageStatsManager
+                    .queryAndAggregateUsageStats(
+                        weekStart.toInstant().toEpochMilli(),
+                        intervalEnd.toInstant().toEpochMilli()
+                    )
+                    .values
+                    .sumOf { it.totalTimeInForeground }
                 val label = "${formatter.format(weekStart)} - ${formatter.format(weekEnd)}"
                 WeeklyUsageSummary(
                     label = label,
-                    totalTimeMs = totalsByWeekStart[weekStart] ?: 0L
+                    totalTimeMs = totalMs
                 )
             }
+    }
+
+    private fun indexOfWeek(
+        weekStart: ZonedDateTime,
+        currentWeekStart: ZonedDateTime
+    ): Long {
+        return java.time.temporal.ChronoUnit.WEEKS.between(weekStart, currentWeekStart)
     }
 }
