@@ -25,6 +25,8 @@ You need Apple's Family Controls entitlement enabled for the app and extensions 
 
 ## Build on a Mac
 
+If you are using Windows: you can edit the iOS code on Windows, but the actual iPhone install step requires a Mac (or a hosted Mac CI) because Apple signing and device deployment use Xcode on macOS.
+
 1. Install Xcode and XcodeGen:
    - `brew install xcodegen`
 2. Edit `project.yml` and replace:
@@ -36,10 +38,54 @@ You need Apple's Family Controls entitlement enabled for the app and extensions 
    - `cd ios`
    - `xcodegen generate`
    - `open AppBlocker.xcodeproj`
-5. In Xcode, confirm capabilities for the app and extensions:
-   - Family Controls
-   - App Groups
+5. In Xcode, confirm capabilities:
+   - Family Controls: `AppBlocker`, `AppBlockerDeviceActivityMonitor`, `AppBlockerShieldConfiguration`
+   - App Groups: `AppBlocker`, `AppBlockerDeviceActivityMonitor` (shared rules storage)
 6. Run on a physical iPhone. Apple's Screen Time APIs do not fully work in the simulator.
+
+## Windows workflow (how to install if you only have Windows)
+
+You cannot install this iOS app onto a real iPhone from Windows alone because Apple requires Xcode on macOS to build and sign iOS apps.
+
+You have three practical options:
+
+- Use any Mac (your own, a friend's, or a spare Mac mini) for the build/install step.
+- Use a hosted Mac service (for example MacStadium) to remote into macOS, then run Xcode there.
+- Use macOS CI (GitHub Actions macOS runner) to build/sign and distribute via TestFlight (more setup, best for multiple devices).
+
+### Install to your own iPhone (remote Mac + Xcode Run)
+
+1. Develop on Windows as usual (this repo is fine on Windows).
+2. Push the repo to a Git remote that your Mac can pull from (GitHub, private repo, etc.).
+3. On the Mac:
+   - `cd ios`
+   - `brew install xcodegen`
+   - `xcodegen generate`
+   - open `AppBlocker.xcodeproj` in Xcode
+4. In Xcode, for **all three** targets:
+   - `AppBlocker`
+   - `AppBlockerDeviceActivityMonitor`
+   - `AppBlockerShieldConfiguration`
+   Set `Signing & Capabilities`:
+   - select your Team
+   - ensure bundle identifiers are unique and under your Team
+   - ensure Family Controls entitlement is enabled for your Team/account
+   - ensure App Groups includes `group.com.indrajeet.appblocker` (or your custom group) on `AppBlocker` + `AppBlockerDeviceActivityMonitor`
+5. Connect the iPhone to the Mac (USB), unlock it, and press Trust if prompted.
+6. On the iPhone (iOS 16+), enable Developer Mode if prompted.
+7. Select the iPhone as the run destination in Xcode and click Run.
+8. On the iPhone, open AppBlocker and approve the Screen Time authorization prompt.
+
+### Install to multiple iPhones (Mac build + TestFlight)
+
+1. On the Mac, build and archive in Xcode: Product -> Archive.
+2. Upload the archive to App Store Connect from Organizer.
+3. In App Store Connect -> TestFlight:
+   - wait for processing
+   - add internal/external testers
+4. On each iPhone, install TestFlight and accept the AppBlocker invite.
+
+Reminder: without macOS/Xcode somewhere in the loop, you cannot install this iOS version onto a real iPhone.
 
 ## Install on iPhone
 
@@ -54,17 +100,20 @@ This is the simplest path for installing on your own iPhone.
 
 1. Connect the iPhone to your Mac (USB), unlock it, and press "Trust" if prompted.
 2. In Xcode, open `ios/AppBlocker.xcodeproj` and select the `AppBlocker` scheme.
-3. In `Signing & Capabilities` for all three targets:
+3. In `Signing & Capabilities`:
    - `AppBlocker`
    - `AppBlockerDeviceActivityMonitor`
    - `AppBlockerShieldConfiguration`
+   Ensure Family Controls is enabled for all three targets.
+4. Ensure App Groups is enabled for:
+   - `AppBlocker`
+   - `AppBlockerDeviceActivityMonitor`
    Ensure:
    - a valid Team is selected
    - the bundle identifiers are unique and under your Team
-   - Family Controls entitlement is present
    - App Groups includes `group.com.indrajeet.appblocker` (or your custom group)
-4. Choose your iPhone as the run destination and click Run.
-5. On the iPhone, open AppBlocker and approve the Screen Time authorization prompt.
+5. Choose your iPhone as the run destination and click Run.
+6. On the iPhone, open AppBlocker and approve the Screen Time authorization prompt.
 
 ### Option B: install via TestFlight (for distributing to other iPhones)
 
@@ -78,11 +127,11 @@ This is the cleanest way to install on multiple devices you manage.
 Notes:
 
 - You generally need a paid Apple Developer Program account for TestFlight distribution and required entitlements.
-- Apple’s Screen Time APIs are designed to run on real devices; expect limited behavior on simulators.
+- Apple's Screen Time APIs are designed to run on real devices; expect limited behavior on simulators.
 
 ## Troubleshooting
 
-- Build fails with entitlement/capability errors: ensure Family Controls entitlement is enabled for your Team, and the same App Group is present on the app + extension targets.
+- Build fails with entitlement/capability errors: ensure Family Controls entitlement is enabled for your Team, and the same App Group is present on `AppBlocker` + `AppBlockerDeviceActivityMonitor`.
 - Rules do not apply at runtime: confirm the iPhone granted Screen Time authorization inside the app (Home screen status should be Approved).
 - Shields never appear: add a bucket, select at least one app/category/website token, then add a window that is active right now.
 

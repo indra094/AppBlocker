@@ -102,6 +102,7 @@ Website blocking is best-effort because Android does not expose a universal brow
 - `scripts/uninstall.ps1` admin removal + uninstall helper (supports optional `-KeepBuckets`)
 
 For iPhone install steps, see `ios/README.md`.
+Note: building/installing the iOS app requires macOS/Xcode (Windows-only machines need a Mac/hosted Mac/CI for that step).
 
 ## Build notes
 
