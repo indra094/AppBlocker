@@ -18,6 +18,7 @@ import com.indrajeet.appblocker.blocking.RuleEvaluator
 import com.indrajeet.appblocker.blocking.RuleSnapshot
 import com.indrajeet.appblocker.ui.BlockedActivity
 import com.indrajeet.appblocker.util.HostNormalizer
+import java.time.LocalTime
 import java.time.ZonedDateTime
 import java.util.Locale
 import kotlinx.coroutines.CoroutineScope
@@ -45,6 +46,48 @@ class BlockAccessibilityService : AccessibilityService() {
     companion object {
         private const val SAFE_REDIRECT_URL = "https://github.com"
         private const val SAFE_REDIRECT_HOST = "github.com"
+        private val WHATSAPP_PACKAGES = setOf(
+            "com.whatsapp",
+            "com.whatsapp.w4b"
+        )
+        private val WHATSAPP_CALL_CUTOFF: LocalTime = LocalTime.of(21, 30)
+        private val WHATSAPP_END_CALL_MARKERS = listOf(
+            "end call",
+            "hang up",
+            "decline",
+            "leave call"
+        )
+        private val WHATSAPP_END_CALL_VIEW_ID_MARKERS = listOf(
+            "end_call",
+            "hangup",
+            "decline",
+            "leave_call"
+        )
+        private val WHATSAPP_CALL_ACTION_MARKERS = listOf(
+            "audio call",
+            "voice call",
+            "video call",
+            "start call",
+            "join call",
+            "call back"
+        )
+        private val WHATSAPP_CALL_ACTION_VIEW_ID_MARKERS = listOf(
+            "call",
+            "video_call",
+            "voice_call",
+            "audio_call",
+            "join_call"
+        )
+        private val WHATSAPP_IN_CALL_MARKERS = listOf(
+            "mute",
+            "speaker",
+            "switch camera",
+            "turn off camera",
+            "turn on camera",
+            "calling",
+            "ringing",
+            "reconnecting"
+        )
     }
 
     private val ticker = object : Runnable {
@@ -79,19 +122,32 @@ class BlockAccessibilityService : AccessibilityService() {
             return
         }
         val packageName = currentEvent.packageName?.toString() ?: return
+        if (packageName == this.packageName) {
+            return
+        }
         val isWindowChangeEvent =
             eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED ||
                 eventType == AccessibilityEvent.TYPE_WINDOWS_CHANGED
         val isBrowserContentEvent =
             eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED &&
                 packageName in BrowserSupport.browserAddressBars.keys
-        if (!isWindowChangeEvent && !isBrowserContentEvent) {
-            return
-        }
-        if (packageName == this.packageName) {
+        val isWhatsappActivityEvent =
+            packageName in WHATSAPP_PACKAGES &&
+                (
+                    isWindowChangeEvent ||
+                        eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED ||
+                        eventType == AccessibilityEvent.TYPE_VIEW_CLICKED
+                    )
+        if (!isWindowChangeEvent && !isBrowserContentEvent && !isWhatsappActivityEvent) {
             return
         }
         currentPackage = packageName
+        if (isWhatsappActivityEvent) {
+            handleWhatsappActivityEvent(currentEvent)
+            if (packageName in WHATSAPP_PACKAGES && isAfterWhatsappCallCutoff()) {
+                return
+            }
+        }
         evaluateCurrentContext()
     }
 
@@ -115,10 +171,13 @@ class BlockAccessibilityService : AccessibilityService() {
             return
         }
         val snapshot = ruleSnapshot
+        val now = ZonedDateTime.now()
+        if (disconnectWhatsappCallAfterCutoff(activePackage, now)) {
+            return
+        }
         if (snapshot.buckets.isEmpty()) {
             return
         }
-        val now = ZonedDateTime.now()
 
         val appBucket = RuleEvaluator.activeBucketForPackage(snapshot, activePackage, now)
         if (appBucket != null) {
@@ -151,6 +210,71 @@ class BlockAccessibilityService : AccessibilityService() {
                 bucketName = hostMatch.first.bucketName
             )
         }
+    }
+
+    private fun disconnectWhatsappCallAfterCutoff(
+        activePackage: String,
+        now: ZonedDateTime
+    ): Boolean {
+        if (activePackage !in WHATSAPP_PACKAGES || now.toLocalTime().isBefore(WHATSAPP_CALL_CUTOFF)) {
+            return false
+        }
+        val root = rootInActiveWindow ?: return false
+        if (!looksLikeWhatsappCall(root)) {
+            return false
+        }
+
+        val disconnected = tapWhatsappEndCall(root)
+        triggerBlock(
+            reason = if (disconnected) {
+                "WhatsApp call ended after 9:30 PM"
+            } else {
+                "WhatsApp call blocked after 9:30 PM"
+            },
+            target = activePackage,
+            forceHome = true,
+            minIntervalMs = 5_000,
+            showBlockedScreen = false
+        )
+        return true
+    }
+
+    private fun handleWhatsappActivityEvent(event: AccessibilityEvent) {
+        if (!isAfterWhatsappCallCutoff()) {
+            return
+        }
+        val packageName = event.packageName?.toString() ?: return
+        if (packageName !in WHATSAPP_PACKAGES) {
+            return
+        }
+        val source = event.source
+        if (
+            event.eventType == AccessibilityEvent.TYPE_VIEW_CLICKED &&
+            source != null &&
+            nodeMatchesAnyMarker(
+                node = source,
+                textMarkers = WHATSAPP_CALL_ACTION_MARKERS,
+                viewIdMarkers = WHATSAPP_CALL_ACTION_VIEW_ID_MARKERS
+            )
+        ) {
+            triggerBlock(
+                reason = "WhatsApp call action blocked after 9:30 PM",
+                target = packageName,
+                forceHome = true,
+                minIntervalMs = 0,
+                showBlockedScreen = false
+            )
+            return
+        }
+
+        val root = rootInActiveWindow ?: return
+        if (looksLikeWhatsappCall(root)) {
+            disconnectWhatsappCallAfterCutoff(packageName, ZonedDateTime.now())
+        }
+    }
+
+    private fun isAfterWhatsappCallCutoff(): Boolean {
+        return !ZonedDateTime.now().toLocalTime().isBefore(WHATSAPP_CALL_CUTOFF)
     }
 
     private fun isProtectedSelfManagementScreen(): Boolean {
@@ -268,6 +392,80 @@ class BlockAccessibilityService : AccessibilityService() {
             findUrlLikeText(node.getChild(index))?.let { return it }
         }
         return null
+    }
+
+    private fun looksLikeWhatsappCall(root: AccessibilityNodeInfo): Boolean {
+        var callSignals = 0
+        val foundEndControl = forEachNode(root) { node ->
+            if (nodeMatchesAnyMarker(node, WHATSAPP_END_CALL_MARKERS, WHATSAPP_END_CALL_VIEW_ID_MARKERS)) {
+                true
+            } else {
+                if (nodeMatchesAnyMarker(node, WHATSAPP_IN_CALL_MARKERS, emptyList())) {
+                    callSignals += 1
+                }
+                false
+            }
+        }
+        return foundEndControl || callSignals >= 2
+    }
+
+    private fun tapWhatsappEndCall(root: AccessibilityNodeInfo): Boolean {
+        var clicked = false
+        forEachNode(root) { node ->
+            if (nodeMatchesAnyMarker(node, WHATSAPP_END_CALL_MARKERS, WHATSAPP_END_CALL_VIEW_ID_MARKERS)) {
+                clicked = clickNodeOrParent(node)
+            }
+            clicked
+        }
+        return clicked
+    }
+
+    private fun nodeMatchesAnyMarker(
+        node: AccessibilityNodeInfo,
+        textMarkers: List<String>,
+        viewIdMarkers: List<String>
+    ): Boolean {
+        val viewId = node.viewIdResourceName?.lowercase(Locale.US)
+        if (viewId != null && viewIdMarkers.any(viewId::contains)) {
+            return true
+        }
+
+        return sequenceOf(
+            node.text?.toString(),
+            node.contentDescription?.toString()
+        )
+            .filterNotNull()
+            .map { it.lowercase(Locale.US) }
+            .any { value -> textMarkers.any(value::contains) }
+    }
+
+    private fun clickNodeOrParent(node: AccessibilityNodeInfo): Boolean {
+        var current: AccessibilityNodeInfo? = node
+        while (current != null) {
+            if (current.isClickable && current.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
+                return true
+            }
+            current = current.parent
+        }
+        return false
+    }
+
+    private fun forEachNode(
+        node: AccessibilityNodeInfo?,
+        visit: (AccessibilityNodeInfo) -> Boolean
+    ): Boolean {
+        if (node == null) {
+            return false
+        }
+        if (visit(node)) {
+            return true
+        }
+        for (index in 0 until node.childCount) {
+            if (forEachNode(node.getChild(index), visit)) {
+                return true
+            }
+        }
+        return false
     }
 
     private fun redirectBlockedWebsite(

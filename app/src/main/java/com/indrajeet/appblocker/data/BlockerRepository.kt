@@ -17,6 +17,12 @@ data class ScheduleDraft(
 
 class PolicyViolationException(message: String) : IllegalArgumentException(message)
 
+data class BucketDeletionResult(
+    val deletedBuckets: List<BlockBucketEntity>,
+    val missingIds: List<Long>,
+    val missingNames: List<String>
+)
+
 class BlockerRepository(
     private val bucketDao: BlockBucketDao,
     private val targetDao: BlockTargetDao,
@@ -59,6 +65,44 @@ class BlockerRepository(
         val normalizedName = name.trim()
         require(normalizedName.isNotBlank()) { "Bucket name is required." }
         return bucketDao.insert(BlockBucketEntity(name = normalizedName))
+    }
+
+    suspend fun deleteBuckets(
+        ids: List<Long>,
+        names: List<String>
+    ): BucketDeletionResult {
+        val normalizedIds = ids.distinct().filter { it > 0L }
+        val normalizedNames = names.map { it.trim() }.filter { it.isNotBlank() }.distinct()
+        require(normalizedIds.isNotEmpty() || normalizedNames.isNotEmpty()) {
+            "Provide at least one bucket id or bucket name."
+        }
+
+        val matchedById = if (normalizedIds.isEmpty()) {
+            emptyList()
+        } else {
+            bucketDao.getByIds(normalizedIds)
+        }
+        val matchedByName = if (normalizedNames.isEmpty()) {
+            emptyList()
+        } else {
+            bucketDao.getByNames(normalizedNames)
+        }
+        val matchedBuckets = (matchedById + matchedByName)
+            .associateBy { it.id }
+            .values
+            .sortedByDescending { it.createdAt }
+
+        if (matchedBuckets.isNotEmpty()) {
+            bucketDao.deleteByIds(matchedBuckets.map { it.id })
+        }
+
+        val foundIds = matchedById.map { it.id }.toSet()
+        val foundNames = matchedByName.map { it.name }.toSet()
+        return BucketDeletionResult(
+            deletedBuckets = matchedBuckets,
+            missingIds = normalizedIds.filterNot(foundIds::contains),
+            missingNames = normalizedNames.filterNot(foundNames::contains)
+        )
     }
 
     suspend fun addAppTarget(bucketId: Long, packageName: String, label: String): Boolean {

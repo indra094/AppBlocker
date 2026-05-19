@@ -13,6 +13,7 @@
 - Blocks selected websites in supported browsers by reading the visible address bar through the same accessibility service.
 - Redirects blocked website hits to `https://github.com` instead of force-closing the browser.
 - Silences WhatsApp / WhatsApp Business notifications during active WhatsApp app-block windows when Notification Access is enabled.
+- Best-effort watches WhatsApp / WhatsApp Business activity after 9:30 PM and ends foreground calls by using the accessibility service to press the in-call end button.
 - Shows a weekly screen-time tracker when Usage Access is enabled.
 - Stores rules locally with Room.
 - Treats targets as append-only.
@@ -58,6 +59,12 @@ If WhatsApp notifications are not silenced during block windows, the most common
 - notification access is off
 - WhatsApp is not added as a blocked app in an active bucket/time window
 
+If WhatsApp calls are not ended after 9:30 PM, the most common causes are:
+
+- accessibility is off
+- the in-call WhatsApp UI did not expose an accessible end-call control on that device/build
+- the call was not in the foreground when the check ran
+
 If weekly screen time is empty, the most common causes are:
 
 - usage access is off
@@ -87,10 +94,14 @@ Website blocking is best-effort because Android does not expose a universal brow
 ## Project layout
 
 - `app/` Android application
+- `ios/` SwiftUI iPhone application scaffold using Apple's Screen Time APIs
 - `scripts/build-debug.ps1` build helper
+- `scripts/delete-buckets.ps1` delete selected buckets from the laptop
 - `scripts/install.ps1` install helper
 - `scripts/provision-device-owner.ps1` device-owner helper
 - `scripts/uninstall.ps1` admin removal + uninstall helper (supports optional `-KeepBuckets`)
+
+For iPhone install steps, see `ios/README.md`.
 
 ## Build notes
 
@@ -155,3 +166,16 @@ To remove the app later, run one of these in a shell where `APPBLOCKER_RELEASE_T
 - Optional: uninstall app but keep blocked buckets/config on device data partition:
   - `scripts/uninstall.ps1 -KeepBuckets`
   - This mode uses Android package-manager uninstall with `-k` and may be user-0 scoped on modern Android builds.
+
+To delete only certain buckets from the laptop without uninstalling:
+
+- By bucket id:
+  - `scripts/delete-buckets.ps1 -BucketId 3,5`
+- By exact bucket name:
+  - `scripts/delete-buckets.ps1 -BucketName Social,Games`
+
+Notes:
+
+- This uses the same `APPBLOCKER_RELEASE_TOKEN` as uninstall.
+- Deleting a bucket also deletes its apps/domains and time windows through Room foreign-key cascade.
+- Bucket-name deletion is exact-match and deletes all buckets with that exact name.

@@ -1,0 +1,53 @@
+name: AppBlocker
+options:
+  minimumXcodeGenVersion: 2.38.0
+  deploymentTarget:
+    iOS: "16.0"
+settings:
+  base:
+    DEVELOPMENT_TEAM: ""
+    SWIFT_VERSION: 5.9
+    IPHONEOS_DEPLOYMENT_TARGET: "16.0"
+    TARGETED_DEVICE_FAMILY: "1"
+    SUPPORTS_MACCATALYST: NO
+targets:
+  AppBlocker:
+    type: application
+    platform: iOS
+    sources:
+      - path: AppBlocker
+      - path: Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.indrajeet.appblocker.ios
+        INFOPLIST_FILE: AppBlocker/Info.plist
+        CODE_SIGN_ENTITLEMENTS: AppBlocker/AppBlocker.entitlements
+        PRODUCT_NAME: AppBlocker
+    dependencies:
+      - target: AppBlockerDeviceActivityMonitor
+      - target: AppBlockerShieldConfiguration
+  AppBlockerDeviceActivityMonitor:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: Extensions/DeviceActivityMonitor
+      - path: Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.indrajeet.appblocker.ios.DeviceActivityMonitor
+        INFOPLIST_FILE: Extensions/DeviceActivityMonitor/Info.plist
+        CODE_SIGN_ENTITLEMENTS: Extensions/DeviceActivityMonitor/DeviceActivityMonitor.entitlements
+        PRODUCT_NAME: AppBlockerDeviceActivityMonitor
+        APPLICATION_EXTENSION_API_ONLY: YES
+  AppBlockerShieldConfiguration:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: Extensions/ShieldConfiguration
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.indrajeet.appblocker.ios.ShieldConfiguration
+        INFOPLIST_FILE: Extensions/ShieldConfiguration/Info.plist
+        CODE_SIGN_ENTITLEMENTS: Extensions/ShieldConfiguration/ShieldConfiguration.entitlements
+        PRODUCT_NAME: AppBlockerShieldConfiguration
+        APPLICATION_EXTENSION_API_ONLY: YES

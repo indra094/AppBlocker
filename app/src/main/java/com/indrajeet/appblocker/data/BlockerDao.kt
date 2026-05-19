@@ -22,8 +22,17 @@ interface BlockBucketDao {
     @Query("SELECT * FROM block_buckets ORDER BY createdAt DESC")
     fun observeAll(): Flow<List<BlockBucketEntity>>
 
+    @Query("SELECT * FROM block_buckets WHERE id IN (:ids)")
+    suspend fun getByIds(ids: List<Long>): List<BlockBucketEntity>
+
+    @Query("SELECT * FROM block_buckets WHERE name IN (:names)")
+    suspend fun getByNames(names: List<String>): List<BlockBucketEntity>
+
     @Insert
     suspend fun insert(bucket: BlockBucketEntity): Long
+
+    @Query("DELETE FROM block_buckets WHERE id IN (:ids)")
+    suspend fun deleteByIds(ids: List<Long>): Int
 }
 
 @Dao

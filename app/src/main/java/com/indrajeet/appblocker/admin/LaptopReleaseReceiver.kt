@@ -7,19 +7,34 @@ import android.content.Context
 import android.content.Intent
 import android.os.UserManager
 import android.util.Log
+import com.indrajeet.appblocker.AppBlockerApplication
 import com.indrajeet.appblocker.BuildConfig
+import kotlinx.coroutines.runBlocking
 
 class LaptopReleaseReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
-        if (intent?.action != ACTION_RELEASE_FOR_UNINSTALL) {
+        val action = intent?.action ?: return
+        if (action != ACTION_RELEASE_FOR_UNINSTALL && action != ACTION_DELETE_BUCKETS) {
             return
         }
 
         val providedToken = intent.getStringExtra(EXTRA_TOKEN).orEmpty()
         if (providedToken != BuildConfig.LAPTOP_RELEASE_TOKEN) {
-            Log.w(TAG, "Rejecting uninstall release request with invalid token.")
+            Log.w(TAG, "Rejecting laptop action with invalid token.")
+            resultCode = RESULT_INVALID_TOKEN
+            resultData = "Invalid token."
             return
         }
+
+        when (action) {
+            ACTION_RELEASE_FOR_UNINSTALL -> releaseForUninstall(context)
+            ACTION_DELETE_BUCKETS -> deleteBuckets(context, intent)
+        }
+    }
+
+    private fun releaseForUninstall(context: Context) {
+        resultCode = RESULT_OK
+        resultData = "Uninstall release processed."
 
         val manager = context.getSystemService(DevicePolicyManager::class.java) ?: return
         val admin = ComponentName(context, BlockDeviceAdminReceiver::class.java)
@@ -44,12 +59,77 @@ class LaptopReleaseReceiver : BroadcastReceiver() {
             .onFailure { Log.e(TAG, "Failed to remove active admin.", it) }
     }
 
+    private fun deleteBuckets(context: Context, intent: Intent) {
+        val ids = parseIds(intent.getStringExtra(EXTRA_BUCKET_IDS))
+        val names = parseDelimited(intent.getStringExtra(EXTRA_BUCKET_NAMES))
+        if (ids.isEmpty() && names.isEmpty()) {
+            resultCode = RESULT_INVALID_REQUEST
+            resultData = "Provide at least one bucket id or exact bucket name."
+            return
+        }
+
+        val repository = (context.applicationContext as AppBlockerApplication).repository
+        runCatching {
+            runBlocking {
+                repository.deleteBuckets(ids = ids, names = names)
+            }
+        }.onSuccess { outcome ->
+            val deletedSummary = if (outcome.deletedBuckets.isEmpty()) {
+                "Deleted 0 buckets."
+            } else {
+                val labels = outcome.deletedBuckets.joinToString(", ") { "${it.name} (#${it.id})" }
+                "Deleted ${outcome.deletedBuckets.size} bucket(s): $labels."
+            }
+            val missingIdSummary = if (outcome.missingIds.isEmpty()) {
+                ""
+            } else {
+                " Missing ids: ${outcome.missingIds.joinToString(", ")}."
+            }
+            val missingNameSummary = if (outcome.missingNames.isEmpty()) {
+                ""
+            } else {
+                " Missing exact names: ${outcome.missingNames.joinToString(", ")}."
+            }
+            resultCode = RESULT_OK
+            resultData = deletedSummary + missingIdSummary + missingNameSummary
+        }.onFailure {
+            Log.e(TAG, "Failed to delete buckets from laptop action.", it)
+            resultCode = RESULT_FAILURE
+            resultData = it.message ?: "Bucket deletion failed."
+        }
+    }
+
+    private fun parseIds(value: String?): List<Long> {
+        return parseDelimited(value)
+            .mapNotNull { it.toLongOrNull() }
+            .filter { it > 0L }
+            .distinct()
+    }
+
+    private fun parseDelimited(value: String?): List<String> {
+        return value
+            .orEmpty()
+            .split(EXTRA_DELIMITER)
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .distinct()
+    }
+
     companion object {
         const val ACTION_RELEASE_FOR_UNINSTALL =
             "com.indrajeet.appblocker.action.RELEASE_FOR_UNINSTALL"
+        const val ACTION_DELETE_BUCKETS =
+            "com.indrajeet.appblocker.action.DELETE_BUCKETS"
         const val EXTRA_TOKEN = "token"
+        const val EXTRA_BUCKET_IDS = "bucket_ids"
+        const val EXTRA_BUCKET_NAMES = "bucket_names"
 
+        private const val EXTRA_DELIMITER = "|||"
         private const val USER_RESTRICTION_NO_CONFIG_SETTINGS = "no_config_settings"
+        private const val RESULT_OK = 0
+        private const val RESULT_INVALID_TOKEN = 1
+        private const val RESULT_INVALID_REQUEST = 2
+        private const val RESULT_FAILURE = 3
         private const val TAG = "LaptopReleaseReceiver"
     }
 }

@@ -84,6 +84,7 @@
             android:exported="true">
             <intent-filter>
                 <action android:name="com.indrajeet.appblocker.action.RELEASE_FOR_UNINSTALL" />
+                <action android:name="com.indrajeet.appblocker.action.DELETE_BUCKETS" />
             </intent-filter>
         </receiver>
 
