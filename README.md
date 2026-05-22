@@ -13,7 +13,7 @@
 - Blocks selected websites in supported browsers by reading the visible address bar through the same accessibility service.
 - Redirects blocked website hits to `https://github.com` instead of force-closing the browser.
 - Silences WhatsApp / WhatsApp Business notifications during active WhatsApp app-block windows when Notification Access is enabled.
-- Best-effort watches WhatsApp / WhatsApp Business activity after 9:30 PM and ends foreground calls by using the accessibility service to press the in-call end button.
+- Best-effort watches WhatsApp / WhatsApp Business activity between 8:30 PM and 6:30 AM and ends foreground calls by using the accessibility service to press the in-call end button without bouncing other apps to Home.
 - Shows a weekly screen-time tracker when Usage Access is enabled.
 - Stores rules locally with Room.
 - Treats targets as append-only.
@@ -59,7 +59,7 @@ If WhatsApp notifications are not silenced during block windows, the most common
 - notification access is off
 - WhatsApp is not added as a blocked app in an active bucket/time window
 
-If WhatsApp calls are not ended after 9:30 PM, the most common causes are:
+If WhatsApp calls are not ended between 8:30 PM and 6:30 AM, the most common causes are:
 
 - accessibility is off
 - the in-call WhatsApp UI did not expose an accessible end-call control on that device/build

@@ -379,9 +379,9 @@ private fun PermissionCard(
                     Text("Notification access (WhatsApp silence)", fontWeight = FontWeight.Bold)
                     Text(
                         if (notificationAccessEnabled) {
-                            "Enabled. WhatsApp notifications can be silenced during active WhatsApp block windows, and foreground WhatsApp calls are ended after 9:30 PM."
+                            "Enabled. WhatsApp notifications can be silenced during active WhatsApp block windows, and foreground WhatsApp calls are ended between 8:30 PM and 6:30 AM."
                         } else {
-                            "Enable notification access so AppBlocker can cancel WhatsApp notifications during active WhatsApp block windows. WhatsApp call ending after 9:30 PM still depends on Accessibility."
+                            "Enable notification access so AppBlocker can cancel WhatsApp notifications during active WhatsApp block windows. WhatsApp call ending between 8:30 PM and 6:30 AM still depends on Accessibility."
                         }
                     )
                 }

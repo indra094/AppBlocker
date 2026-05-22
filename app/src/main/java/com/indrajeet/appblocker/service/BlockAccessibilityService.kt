@@ -9,6 +9,7 @@ import android.net.Uri
 import android.provider.Settings
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import com.indrajeet.appblocker.AppBlockerApplication
@@ -18,7 +19,7 @@ import com.indrajeet.appblocker.blocking.RuleEvaluator
 import com.indrajeet.appblocker.blocking.RuleSnapshot
 import com.indrajeet.appblocker.ui.BlockedActivity
 import com.indrajeet.appblocker.util.HostNormalizer
-import java.time.LocalTime
+import com.indrajeet.appblocker.util.WhatsappCallWindow
 import java.time.ZonedDateTime
 import java.util.Locale
 import kotlinx.coroutines.CoroutineScope
@@ -44,13 +45,13 @@ class BlockAccessibilityService : AccessibilityService() {
     private var lastShownAt: Long = 0L
 
     companion object {
+        private const val TAG = "BlockAccessibility"
         private const val SAFE_REDIRECT_URL = "https://github.com"
         private const val SAFE_REDIRECT_HOST = "github.com"
         private val WHATSAPP_PACKAGES = setOf(
             "com.whatsapp",
             "com.whatsapp.w4b"
         )
-        private val WHATSAPP_CALL_CUTOFF: LocalTime = LocalTime.of(21, 30)
         private val WHATSAPP_END_CALL_MARKERS = listOf(
             "end call",
             "hang up",
@@ -62,21 +63,6 @@ class BlockAccessibilityService : AccessibilityService() {
             "hangup",
             "decline",
             "leave_call"
-        )
-        private val WHATSAPP_CALL_ACTION_MARKERS = listOf(
-            "audio call",
-            "voice call",
-            "video call",
-            "start call",
-            "join call",
-            "call back"
-        )
-        private val WHATSAPP_CALL_ACTION_VIEW_ID_MARKERS = listOf(
-            "call",
-            "video_call",
-            "voice_call",
-            "audio_call",
-            "join_call"
         )
         private val WHATSAPP_IN_CALL_MARKERS = listOf(
             "mute",
@@ -92,63 +78,77 @@ class BlockAccessibilityService : AccessibilityService() {
 
     private val ticker = object : Runnable {
         override fun run() {
-            evaluateCurrentContext()
+            runCatching { evaluateCurrentContext() }
+                .onFailure { Log.e(TAG, "Ticker evaluation failed", it) }
             mainHandler.postDelayed(this, 5_000)
         }
     }
 
     override fun onServiceConnected() {
         super.onServiceConnected()
-        serviceInfo = serviceInfo.apply {
-            flags = flags or AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS or
-                AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
-        }
-
-        val repository = (application as AppBlockerApplication).repository
-        settingsPackages.clear()
-        settingsPackages.addAll(discoverSettingsPackages())
-        serviceScope.launch {
-            repository.observeRuleSnapshot().collectLatest {
-                ruleSnapshot = it
+        runCatching {
+            serviceInfo = serviceInfo.apply {
+                flags = flags or AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS or
+                    AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
             }
+
+            val repository = (application as AppBlockerApplication).repository
+            settingsPackages.clear()
+            settingsPackages.addAll(discoverSettingsPackages())
+            serviceScope.launch {
+                repository.observeRuleSnapshot().collectLatest {
+                    ruleSnapshot = it
+                }
+            }
+            mainHandler.post(ticker)
         }
-        mainHandler.post(ticker)
+            .onFailure { Log.e(TAG, "Failed to initialize accessibility service", it) }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        val currentEvent = event ?: return
-        val eventType = currentEvent.eventType
-        if (eventType == AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED) {
-            return
-        }
-        val packageName = currentEvent.packageName?.toString() ?: return
-        if (packageName == this.packageName) {
-            return
-        }
-        val isWindowChangeEvent =
-            eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED ||
-                eventType == AccessibilityEvent.TYPE_WINDOWS_CHANGED
-        val isBrowserContentEvent =
-            eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED &&
-                packageName in BrowserSupport.browserAddressBars.keys
-        val isWhatsappActivityEvent =
-            packageName in WHATSAPP_PACKAGES &&
-                (
-                    isWindowChangeEvent ||
-                        eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED ||
-                        eventType == AccessibilityEvent.TYPE_VIEW_CLICKED
-                    )
-        if (!isWindowChangeEvent && !isBrowserContentEvent && !isWhatsappActivityEvent) {
-            return
-        }
-        currentPackage = packageName
-        if (isWhatsappActivityEvent) {
-            handleWhatsappActivityEvent(currentEvent)
-            if (packageName in WHATSAPP_PACKAGES && isAfterWhatsappCallCutoff()) {
+        runCatching {
+            val currentEvent = event ?: return
+            val eventType = currentEvent.eventType
+            if (eventType == AccessibilityEvent.TYPE_NOTIFICATION_STATE_CHANGED) {
                 return
             }
+            val packageName = currentEvent.packageName?.toString() ?: return
+            if (packageName == this.packageName) {
+                return
+            }
+            val foregroundPackage = activeWindowPackageName()
+            if (foregroundPackage == this.packageName) {
+                return
+            }
+            val isWindowChangeEvent =
+                eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED ||
+                    eventType == AccessibilityEvent.TYPE_WINDOWS_CHANGED
+            val isBrowserContentEvent =
+                eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED &&
+                    packageName in BrowserSupport.browserAddressBars.keys
+            val isWhatsappActivityEvent =
+                packageName in WHATSAPP_PACKAGES &&
+                    (
+                        isWindowChangeEvent ||
+                            eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED ||
+                            eventType == AccessibilityEvent.TYPE_VIEW_CLICKED
+                        )
+            if (!isWindowChangeEvent && !isBrowserContentEvent && !isWhatsappActivityEvent) {
+                return
+            }
+            when {
+                foregroundPackage != null -> currentPackage = foregroundPackage
+                isWindowChangeEvent || isBrowserContentEvent -> currentPackage = packageName
+            }
+            if (isWhatsappActivityEvent) {
+                handleWhatsappActivityEvent(currentEvent)
+                if (packageName in WHATSAPP_PACKAGES && isWithinWhatsappCallWindow()) {
+                    return
+                }
+            }
+            evaluateCurrentContext()
         }
-        evaluateCurrentContext()
+            .onFailure { Log.e(TAG, "Accessibility event handling failed", it) }
     }
 
     override fun onInterrupt() = Unit
@@ -160,19 +160,21 @@ class BlockAccessibilityService : AccessibilityService() {
     }
 
     private fun evaluateCurrentContext() {
-        val activePackage = currentPackage ?: return
+        val activePackage = activeWindowPackageName() ?: currentPackage ?: return
+        currentPackage = activePackage
         if (activePackage in settingsPackages && isProtectedSelfManagementScreen()) {
             triggerBlock(
                 reason = "Protected setting blocked",
                 target = activePackage,
                 forceHome = true,
-                minIntervalMs = 0
+                minIntervalMs = 0,
+                showBlockedScreen = false
             )
             return
         }
         val snapshot = ruleSnapshot
         val now = ZonedDateTime.now()
-        if (disconnectWhatsappCallAfterCutoff(activePackage, now)) {
+        if (disconnectWhatsappCallInBlockedWindow(activePackage, now)) {
             return
         }
         if (snapshot.buckets.isEmpty()) {
@@ -212,11 +214,11 @@ class BlockAccessibilityService : AccessibilityService() {
         }
     }
 
-    private fun disconnectWhatsappCallAfterCutoff(
+    private fun disconnectWhatsappCallInBlockedWindow(
         activePackage: String,
         now: ZonedDateTime
     ): Boolean {
-        if (activePackage !in WHATSAPP_PACKAGES || now.toLocalTime().isBefore(WHATSAPP_CALL_CUTOFF)) {
+        if (activePackage !in WHATSAPP_PACKAGES || !WhatsappCallWindow.isActive(now)) {
             return false
         }
         val root = rootInActiveWindow ?: return false
@@ -227,12 +229,12 @@ class BlockAccessibilityService : AccessibilityService() {
         val disconnected = tapWhatsappEndCall(root)
         triggerBlock(
             reason = if (disconnected) {
-                "WhatsApp call ended after 9:30 PM"
+                "WhatsApp call ended during the 8:30 PM to 6:30 AM window"
             } else {
-                "WhatsApp call blocked after 9:30 PM"
+                "WhatsApp call detected during the 8:30 PM to 6:30 AM window"
             },
             target = activePackage,
-            forceHome = true,
+            forceHome = false,
             minIntervalMs = 5_000,
             showBlockedScreen = false
         )
@@ -240,41 +242,25 @@ class BlockAccessibilityService : AccessibilityService() {
     }
 
     private fun handleWhatsappActivityEvent(event: AccessibilityEvent) {
-        if (!isAfterWhatsappCallCutoff()) {
+        if (!isWithinWhatsappCallWindow()) {
             return
         }
         val packageName = event.packageName?.toString() ?: return
         if (packageName !in WHATSAPP_PACKAGES) {
             return
         }
-        val source = event.source
-        if (
-            event.eventType == AccessibilityEvent.TYPE_VIEW_CLICKED &&
-            source != null &&
-            nodeMatchesAnyMarker(
-                node = source,
-                textMarkers = WHATSAPP_CALL_ACTION_MARKERS,
-                viewIdMarkers = WHATSAPP_CALL_ACTION_VIEW_ID_MARKERS
-            )
-        ) {
-            triggerBlock(
-                reason = "WhatsApp call action blocked after 9:30 PM",
-                target = packageName,
-                forceHome = true,
-                minIntervalMs = 0,
-                showBlockedScreen = false
-            )
+        val root = rootInActiveWindow ?: return
+        val activePackage = root.packageName?.toString() ?: return
+        if (activePackage !in WHATSAPP_PACKAGES) {
             return
         }
-
-        val root = rootInActiveWindow ?: return
         if (looksLikeWhatsappCall(root)) {
-            disconnectWhatsappCallAfterCutoff(packageName, ZonedDateTime.now())
+            disconnectWhatsappCallInBlockedWindow(activePackage, ZonedDateTime.now())
         }
     }
 
-    private fun isAfterWhatsappCallCutoff(): Boolean {
-        return !ZonedDateTime.now().toLocalTime().isBefore(WHATSAPP_CALL_CUTOFF)
+    private fun isWithinWhatsappCallWindow(): Boolean {
+        return WhatsappCallWindow.isActive(ZonedDateTime.now())
     }
 
     private fun isProtectedSelfManagementScreen(): Boolean {
@@ -367,6 +353,13 @@ class BlockAccessibilityService : AccessibilityService() {
             discovered.add(info.activityInfo.packageName)
         }
         return discovered
+    }
+
+    private fun activeWindowPackageName(): String? {
+        return rootInActiveWindow
+            ?.packageName
+            ?.toString()
+            ?.takeUnless { it == this.packageName }
     }
 
     private fun readCurrentHost(browserPackage: String): String? {
@@ -522,7 +515,8 @@ class BlockAccessibilityService : AccessibilityService() {
         lastShownAt = now
 
         if (forceHome) {
-            performGlobalAction(GLOBAL_ACTION_HOME)
+            runCatching { performGlobalAction(GLOBAL_ACTION_HOME) }
+                .onFailure { Log.e(TAG, "Failed to send user home for $target", it) }
         }
         if (!showBlockedScreen) {
             return
@@ -540,6 +534,7 @@ class BlockAccessibilityService : AccessibilityService() {
             putExtra(BlockedActivity.EXTRA_REASON, reason)
             putExtra(BlockedActivity.EXTRA_TARGET, target)
         }
-        startActivity(intent)
+        runCatching { startActivity(intent) }
+            .onFailure { Log.e(TAG, "Failed to show blocked screen for $target", it) }
     }
 }
