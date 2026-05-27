@@ -97,6 +97,11 @@ Website blocking is best-effort because Android does not expose a universal brow
 - `ios/` SwiftUI iPhone application scaffold using Apple's Screen Time APIs
 - `scripts/build-debug.ps1` build helper
 - `scripts/delete-buckets.ps1` delete selected buckets from the laptop
+- `scripts/ios-build-debug.ps1` iOS build helper for macOS + Xcode
+- `scripts/ios-delete-buckets.ps1` delete selected iOS buckets from an exported/shared rule file
+- `scripts/ios-install.ps1` iOS install helper for Simulator or a connected device on macOS
+- `scripts/ios-reset-bucket-schedules.ps1` clear selected iOS bucket windows from an exported/shared rule file
+- `scripts/ios-uninstall.ps1` iOS uninstall helper for Simulator or a connected device on macOS
 - `scripts/install.ps1` install helper
 - `scripts/provision-device-owner.ps1` device-owner helper
 - `scripts/reset-bucket-schedules.ps1` remove time windows from selected buckets on the laptop
@@ -104,6 +109,21 @@ Website blocking is best-effort because Android does not expose a universal brow
 
 For iPhone install steps, see `ios/README.md`.
 Note: building/installing the iOS app requires macOS/Xcode (Windows-only machines need a Mac/hosted Mac/CI for that step).
+
+## iPhone maintenance parity
+
+The iPhone build now supports the same bucket-maintenance outcomes as the Android build:
+
+- delete buckets
+- clear a bucket's schedules without deleting its targets
+- export/import rule files for laptop-side edits
+
+On iPhone, these actions are available in two supported ways:
+
+- directly in the app from the bucket overflow menu and the top-right maintenance menu
+- from laptop scripts by exporting `AppBlocker-buckets.json`, running an iOS maintenance script against that file, then importing it back into the app
+
+Apple still does not allow third-party apps to recreate Android-only capabilities such as Accessibility-driven browser URL inspection, device-owner provisioning, or app-controlled uninstall hardening. The iOS implementation uses the closest supported equivalents: Screen Time shields, Files-based rule transfer, and Apple's own supervision / Screen Time controls.
 
 ## Build notes
 

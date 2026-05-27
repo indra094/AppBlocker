@@ -135,9 +135,50 @@ Notes:
 - Rules do not apply at runtime: confirm the iPhone granted Screen Time authorization inside the app (Home screen status should be Approved).
 - Shields never appear: add a bucket, select at least one app/category/website token, then add a window that is active right now.
 
+## Maintenance workflows
+
+The iPhone app now includes the same bucket-maintenance outcomes as the Android build:
+
+- delete a bucket
+- clear all windows from a bucket while keeping its selected targets
+- move rule files between the phone and a laptop
+
+### In the app
+
+1. On the Home screen, use the top-right `...` menu to export or import `AppBlocker-buckets.json`.
+2. Use each bucket's `...` menu to reset its windows or delete the entire bucket.
+
+### From laptop scripts
+
+1. Export `AppBlocker-buckets.json` from the iPhone app.
+2. Run one of these scripts against the exported file:
+   - `scripts/ios-delete-buckets.ps1 -FilePath /path/to/AppBlocker-buckets.json -BucketName Social`
+   - `scripts/ios-reset-bucket-schedules.ps1 -FilePath /path/to/AppBlocker-buckets.json -BucketName Social`
+3. Import the updated JSON file back into the iPhone app.
+
+For Simulator development on a Mac, you can also point those scripts at the shared App Group rule file instead of an exported copy.
+
+## iOS build / install scripts
+
+These helpers are for macOS with Xcode + PowerShell 7:
+
+- `scripts/ios-build-debug.ps1` generates the Xcode project with XcodeGen and builds a Debug `.app`.
+- `scripts/ios-install.ps1` installs the latest build to the booted Simulator by default, or to a connected device with `-DeviceId`.
+- `scripts/ios-uninstall.ps1` removes the app from the booted Simulator by default, or from a connected device with `-DeviceId`.
+
+Examples:
+
+- `pwsh ./scripts/ios-build-debug.ps1`
+- `pwsh ./scripts/ios-install.ps1 -SimulatorName "iPhone 16"`
+- `pwsh ./scripts/ios-install.ps1 -DeviceId <your-device-udid> -AllowProvisioningUpdates`
+- `pwsh ./scripts/ios-uninstall.ps1`
+
 ## Current behavior
 
 - Create buckets.
+- Delete buckets from the app or from exported rule files.
+- Reset bucket windows from the app or from exported rule files.
+- Export/import rule files through the app maintenance menu.
 - Select apps, categories, and websites through Apple's private Screen Time picker.
 - Add recurring blocking windows.
 - Extend existing windows without weakening them.

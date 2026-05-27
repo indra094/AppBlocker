@@ -102,9 +102,76 @@ final class AppModel: ObservableObject {
         }
     }
 
+    func deleteBuckets(ids: Set<UUID> = [], names: Set<String> = []) {
+        let normalizedNames = Set(
+            names
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+        )
+        guard !ids.isEmpty || !normalizedNames.isEmpty else {
+            errorMessage = "Pick at least one bucket id or name."
+            return
+        }
+
+        do {
+            let updatedBuckets = buckets.filter { bucket in
+                !ids.contains(bucket.id) && !normalizedNames.contains(bucket.name)
+            }
+            try replaceBuckets(with: updatedBuckets)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func resetSchedules(ids: Set<UUID> = [], names: Set<String> = []) {
+        let normalizedNames = Set(
+            names
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+        )
+        guard !ids.isEmpty || !normalizedNames.isEmpty else {
+            errorMessage = "Pick at least one bucket id or name."
+            return
+        }
+
+        do {
+            let updatedBuckets = buckets.map { bucket in
+                guard ids.contains(bucket.id) || normalizedNames.contains(bucket.name) else {
+                    return bucket
+                }
+
+                var updatedBucket = bucket
+                updatedBucket.schedules = []
+                return updatedBucket
+            }
+            try replaceBuckets(with: updatedBuckets)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func exportDocument() throws -> BucketTransferDocument {
+        let data = try JSONEncoder.appBlocker.encode(buckets)
+        return BucketTransferDocument(data: data)
+    }
+
+    func importBuckets(from data: Data) {
+        do {
+            let importedBuckets = try JSONDecoder.appBlocker.decode([BlockBucket].self, from: data)
+            try replaceBuckets(with: importedBuckets)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
     private func persistAndReschedule() throws {
         try BucketPersistence.saveBuckets(buckets)
         try rescheduleAndRefreshShields()
+    }
+
+    private func replaceBuckets(with updatedBuckets: [BlockBucket]) throws {
+        buckets = updatedBuckets.sorted { $0.createdAt > $1.createdAt }
+        try persistAndReschedule()
     }
 
     private func rescheduleAndRefreshShields() throws {

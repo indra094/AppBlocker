@@ -1,9 +1,13 @@
 import FamilyControls
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct HomeView: View {
     @EnvironmentObject private var model: AppModel
     @State private var showingAddBucket = false
+    @State private var exportDocument = BucketTransferDocument(data: Data("[]".utf8))
+    @State private var showingExporter = false
+    @State private var showingImporter = false
 
     var body: some View {
         NavigationStack {
@@ -13,6 +17,19 @@ struct HomeView: View {
             }
             .navigationTitle("AppBlocker")
             .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Menu {
+                        Button("Export rules") {
+                            exportRules()
+                        }
+                        Button("Import rules") {
+                            showingImporter = true
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                    }
+                    .accessibilityLabel("Maintenance")
+                }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
                         showingAddBucket = true
@@ -24,6 +41,27 @@ struct HomeView: View {
             }
             .sheet(isPresented: $showingAddBucket) {
                 AddBucketView()
+            }
+            .fileExporter(
+                isPresented: $showingExporter,
+                document: exportDocument,
+                contentType: .json,
+                defaultFilename: "AppBlocker-buckets"
+            ) { result in
+                if case .failure(let error) = result {
+                    model.errorMessage = error.localizedDescription
+                }
+            }
+            .fileImporter(
+                isPresented: $showingImporter,
+                allowedContentTypes: [.json]
+            ) { result in
+                switch result {
+                case .success(let url):
+                    importRules(from: url)
+                case .failure(let error):
+                    model.errorMessage = error.localizedDescription
+                }
             }
             .alert(
                 "AppBlocker",
@@ -74,7 +112,15 @@ struct HomeView: View {
                 .padding(.vertical, 8)
             } else {
                 ForEach(model.buckets) { bucket in
-                    BucketRow(bucket: bucket)
+                    BucketRow(
+                        bucket: bucket,
+                        onResetSchedules: {
+                            model.resetSchedules(ids: Set([bucket.id]))
+                        },
+                        onDelete: {
+                            model.deleteBuckets(ids: Set([bucket.id]))
+                        }
+                    )
                 }
             }
         }
@@ -92,20 +138,64 @@ struct HomeView: View {
             return "Unknown authorization state."
         }
     }
+
+    private func exportRules() {
+        do {
+            exportDocument = try model.exportDocument()
+            showingExporter = true
+        } catch {
+            model.errorMessage = error.localizedDescription
+        }
+    }
+
+    private func importRules(from url: URL) {
+        let didAccessResource = url.startAccessingSecurityScopedResource()
+        defer {
+            if didAccessResource {
+                url.stopAccessingSecurityScopedResource()
+            }
+        }
+
+        do {
+            let data = try Data(contentsOf: url)
+            model.importBuckets(from: data)
+        } catch {
+            model.errorMessage = error.localizedDescription
+        }
+    }
 }
 
 private struct BucketRow: View {
     let bucket: BlockBucket
+    let onResetSchedules: () -> Void
+    let onDelete: () -> Void
     @State private var editingTargets = false
     @State private var addingSchedule = false
     @State private var editingSchedule: BlockSchedule?
+    @State private var showingDeleteConfirmation = false
+    @State private var showingResetConfirmation = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(bucket.name)
-                    .font(.headline)
-                SelectionSummary(selection: bucket.selection)
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(bucket.name)
+                        .font(.headline)
+                    SelectionSummary(selection: bucket.selection)
+                }
+                Spacer()
+                Menu {
+                    Button("Reset windows", role: .destructive) {
+                        showingResetConfirmation = true
+                    }
+                    Button("Delete bucket", role: .destructive) {
+                        showingDeleteConfirmation = true
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                        .imageScale(.large)
+                        .padding(.top, 2)
+                }
             }
 
             HStack {
@@ -144,6 +234,30 @@ private struct BucketRow: View {
         }
         .sheet(item: $editingSchedule) { schedule in
             ScheduleEditorView(bucket: bucket, existing: schedule)
+        }
+        .confirmationDialog(
+            "Reset all windows for \(bucket.name)?",
+            isPresented: $showingResetConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Reset windows", role: .destructive) {
+                onResetSchedules()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This clears every blocking window in the bucket but keeps the selected apps and websites.")
+        }
+        .confirmationDialog(
+            "Delete \(bucket.name)?",
+            isPresented: $showingDeleteConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Delete bucket", role: .destructive) {
+                onDelete()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This removes the bucket, its selected targets, and all of its windows.")
         }
     }
 }
