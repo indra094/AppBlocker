@@ -14,7 +14,11 @@ import kotlinx.coroutines.runBlocking
 class LaptopReleaseReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
         val action = intent?.action ?: return
-        if (action != ACTION_RELEASE_FOR_UNINSTALL && action != ACTION_DELETE_BUCKETS) {
+        if (
+            action != ACTION_RELEASE_FOR_UNINSTALL &&
+            action != ACTION_DELETE_BUCKETS &&
+            action != ACTION_RESET_BUCKET_SCHEDULES
+        ) {
             return
         }
 
@@ -29,6 +33,7 @@ class LaptopReleaseReceiver : BroadcastReceiver() {
         when (action) {
             ACTION_RELEASE_FOR_UNINSTALL -> releaseForUninstall(context)
             ACTION_DELETE_BUCKETS -> deleteBuckets(context, intent)
+            ACTION_RESET_BUCKET_SCHEDULES -> resetBucketSchedules(context, intent)
         }
     }
 
@@ -99,6 +104,48 @@ class LaptopReleaseReceiver : BroadcastReceiver() {
         }
     }
 
+    private fun resetBucketSchedules(context: Context, intent: Intent) {
+        val ids = parseIds(intent.getStringExtra(EXTRA_BUCKET_IDS))
+        val names = parseDelimited(intent.getStringExtra(EXTRA_BUCKET_NAMES))
+        if (ids.isEmpty() && names.isEmpty()) {
+            resultCode = RESULT_INVALID_REQUEST
+            resultData = "Provide at least one bucket id or exact bucket name."
+            return
+        }
+
+        val repository = (context.applicationContext as AppBlockerApplication).repository
+        runCatching {
+            runBlocking {
+                repository.resetSchedules(ids = ids, names = names)
+            }
+        }.onSuccess { outcome ->
+            val resetSummary = if (outcome.resetBuckets.isEmpty()) {
+                "Reset timings for 0 buckets."
+            } else {
+                val labels = outcome.resetBuckets.joinToString(", ") {
+                    "${it.bucket.name} (#${it.bucket.id}, removed ${it.deletedScheduleCount} schedule(s))"
+                }
+                "Reset timings for ${outcome.resetBuckets.size} bucket(s): $labels."
+            }
+            val missingIdSummary = if (outcome.missingIds.isEmpty()) {
+                ""
+            } else {
+                " Missing ids: ${outcome.missingIds.joinToString(", ")}."
+            }
+            val missingNameSummary = if (outcome.missingNames.isEmpty()) {
+                ""
+            } else {
+                " Missing exact names: ${outcome.missingNames.joinToString(", ")}."
+            }
+            resultCode = RESULT_OK
+            resultData = resetSummary + missingIdSummary + missingNameSummary
+        }.onFailure {
+            Log.e(TAG, "Failed to reset bucket schedules from laptop action.", it)
+            resultCode = RESULT_FAILURE
+            resultData = it.message ?: "Bucket timing reset failed."
+        }
+    }
+
     private fun parseIds(value: String?): List<Long> {
         return parseDelimited(value)
             .mapNotNull { it.toLongOrNull() }
@@ -120,6 +167,8 @@ class LaptopReleaseReceiver : BroadcastReceiver() {
             "com.indrajeet.appblocker.action.RELEASE_FOR_UNINSTALL"
         const val ACTION_DELETE_BUCKETS =
             "com.indrajeet.appblocker.action.DELETE_BUCKETS"
+        const val ACTION_RESET_BUCKET_SCHEDULES =
+            "com.indrajeet.appblocker.action.RESET_BUCKET_SCHEDULES"
         const val EXTRA_TOKEN = "token"
         const val EXTRA_BUCKET_IDS = "bucket_ids"
         const val EXTRA_BUCKET_NAMES = "bucket_names"

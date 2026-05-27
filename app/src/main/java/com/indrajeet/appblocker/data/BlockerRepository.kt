@@ -24,6 +24,17 @@ data class BucketDeletionResult(
     val missingNames: List<String>
 )
 
+data class BucketScheduleReset(
+    val bucket: BlockBucketEntity,
+    val deletedScheduleCount: Int
+)
+
+data class BucketScheduleResetResult(
+    val resetBuckets: List<BucketScheduleReset>,
+    val missingIds: List<Long>,
+    val missingNames: List<String>
+)
+
 class BlockerRepository(
     private val bucketDao: BlockBucketDao,
     private val targetDao: BlockTargetDao,
@@ -90,37 +101,44 @@ class BlockerRepository(
         ids: List<Long>,
         names: List<String>
     ): BucketDeletionResult {
-        val normalizedIds = ids.distinct().filter { it > 0L }
-        val normalizedNames = names.map { it.trim() }.filter { it.isNotBlank() }.distinct()
-        require(normalizedIds.isNotEmpty() || normalizedNames.isNotEmpty()) {
-            "Provide at least one bucket id or bucket name."
-        }
-
-        val matchedById = if (normalizedIds.isEmpty()) {
-            emptyList()
-        } else {
-            bucketDao.getByIds(normalizedIds)
-        }
-        val matchedByName = if (normalizedNames.isEmpty()) {
-            emptyList()
-        } else {
-            bucketDao.getByNames(normalizedNames)
-        }
-        val matchedBuckets = (matchedById + matchedByName)
-            .associateBy { it.id }
-            .values
-            .sortedByDescending { it.createdAt }
+        val match = matchBuckets(ids = ids, names = names)
+        val matchedBuckets = match.buckets
 
         if (matchedBuckets.isNotEmpty()) {
             bucketDao.deleteByIds(matchedBuckets.map { it.id })
         }
-
-        val foundIds = matchedById.map { it.id }.toSet()
-        val foundNames = matchedByName.map { it.name }.toSet()
         return BucketDeletionResult(
             deletedBuckets = matchedBuckets,
-            missingIds = normalizedIds.filterNot(foundIds::contains),
-            missingNames = normalizedNames.filterNot(foundNames::contains)
+            missingIds = match.missingIds,
+            missingNames = match.missingNames
+        )
+    }
+
+    suspend fun resetSchedules(
+        ids: List<Long>,
+        names: List<String>
+    ): BucketScheduleResetResult {
+        val match = matchBuckets(ids = ids, names = names)
+        val matchedBuckets = match.buckets
+        val schedulesByBucketId = if (matchedBuckets.isEmpty()) {
+            emptyMap()
+        } else {
+            scheduleDao.getByBucketIds(matchedBuckets.map { it.id }).groupBy { it.bucketId }
+        }
+
+        if (matchedBuckets.isNotEmpty()) {
+            scheduleDao.deleteByBucketIds(matchedBuckets.map { it.id })
+        }
+
+        return BucketScheduleResetResult(
+            resetBuckets = matchedBuckets.map { bucket ->
+                BucketScheduleReset(
+                    bucket = bucket,
+                    deletedScheduleCount = schedulesByBucketId[bucket.id]?.size ?: 0
+                )
+            },
+            missingIds = match.missingIds,
+            missingNames = match.missingNames
         )
     }
 
@@ -213,4 +231,44 @@ class BlockerRepository(
             draft.endDateEpochDay == null || draft.endDateEpochDay >= draft.startDateEpochDay
         ) { "End date must be on or after start date." }
     }
+
+    private suspend fun matchBuckets(
+        ids: List<Long>,
+        names: List<String>
+    ): BucketMatchResult {
+        val normalizedIds = ids.distinct().filter { it > 0L }
+        val normalizedNames = names.map { it.trim() }.filter { it.isNotBlank() }.distinct()
+        require(normalizedIds.isNotEmpty() || normalizedNames.isNotEmpty()) {
+            "Provide at least one bucket id or bucket name."
+        }
+
+        val matchedById = if (normalizedIds.isEmpty()) {
+            emptyList()
+        } else {
+            bucketDao.getByIds(normalizedIds)
+        }
+        val matchedByName = if (normalizedNames.isEmpty()) {
+            emptyList()
+        } else {
+            bucketDao.getByNames(normalizedNames)
+        }
+        val matchedBuckets = (matchedById + matchedByName)
+            .associateBy { it.id }
+            .values
+            .sortedByDescending { it.createdAt }
+        val foundIds = matchedById.map { it.id }.toSet()
+        val foundNames = matchedByName.map { it.name }.toSet()
+
+        return BucketMatchResult(
+            buckets = matchedBuckets,
+            missingIds = normalizedIds.filterNot(foundIds::contains),
+            missingNames = normalizedNames.filterNot(foundNames::contains)
+        )
+    }
+
+    private data class BucketMatchResult(
+        val buckets: List<BlockBucketEntity>,
+        val missingIds: List<Long>,
+        val missingNames: List<String>
+    )
 }

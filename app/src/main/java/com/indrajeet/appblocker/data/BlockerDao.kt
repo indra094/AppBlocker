@@ -52,9 +52,15 @@ interface BlockScheduleDao {
     @Query("SELECT * FROM block_schedules WHERE id = :id LIMIT 1")
     suspend fun getById(id: Long): BlockScheduleEntity?
 
+    @Query("SELECT * FROM block_schedules WHERE bucketId IN (:bucketIds)")
+    suspend fun getByBucketIds(bucketIds: List<Long>): List<BlockScheduleEntity>
+
     @Insert
     suspend fun insert(schedule: BlockScheduleEntity): Long
 
     @Update
     suspend fun update(schedule: BlockScheduleEntity)
+
+    @Query("DELETE FROM block_schedules WHERE bucketId IN (:bucketIds)")
+    suspend fun deleteByBucketIds(bucketIds: List<Long>): Int
 }

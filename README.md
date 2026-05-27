@@ -99,6 +99,7 @@ Website blocking is best-effort because Android does not expose a universal brow
 - `scripts/delete-buckets.ps1` delete selected buckets from the laptop
 - `scripts/install.ps1` install helper
 - `scripts/provision-device-owner.ps1` device-owner helper
+- `scripts/reset-bucket-schedules.ps1` remove time windows from selected buckets on the laptop
 - `scripts/uninstall.ps1` admin removal + uninstall helper (supports optional `-KeepBuckets`)
 
 For iPhone install steps, see `ios/README.md`.
@@ -175,8 +176,16 @@ To delete only certain buckets from the laptop without uninstalling:
 - By exact bucket name:
   - `scripts/delete-buckets.ps1 -BucketName Social,Games`
 
+To keep a bucket but reset its timings from the laptop:
+
+- By bucket id:
+  - `scripts/reset-bucket-schedules.ps1 -BucketId 3,5`
+- By exact bucket name:
+  - `scripts/reset-bucket-schedules.ps1 -BucketName Social,Games`
+
 Notes:
 
 - This uses the same `APPBLOCKER_RELEASE_TOKEN` as uninstall.
 - Deleting a bucket also deletes its apps/domains and time windows through Room foreign-key cascade.
 - Bucket-name deletion is exact-match and deletes all buckets with that exact name.
+- Timing reset deletes all schedules in the matched bucket(s) but keeps the bucket plus its apps/domains.
