@@ -17,6 +17,8 @@ import com.indrajeet.appblocker.util.InstalledApp
 import com.indrajeet.appblocker.util.InstalledAppScanner
 import com.indrajeet.appblocker.util.ScreenTimeTracker
 import com.indrajeet.appblocker.util.WeeklyUsageSummary
+import com.indrajeet.appblocker.util.WhatsappCallWindow
+import com.indrajeet.appblocker.util.WhatsappCallWindowConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -30,7 +32,8 @@ data class HomeUiState(
     val installedApps: List<InstalledApp> = emptyList(),
     val weeklyUsage: List<WeeklyUsageSummary> = emptyList(),
     val isDeviceAdminActive: Boolean = false,
-    val isDeviceOwner: Boolean = false
+    val isDeviceOwner: Boolean = false,
+    val whatsappCallWindow: WhatsappCallWindowConfig = WhatsappCallWindow.defaultConfig
 )
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -54,6 +57,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             isDeviceAdminActive = isDeviceAdminActive,
             isDeviceOwner = isDeviceOwner
         )
+    }.combine(repository.observeWhatsappCallWindow()) { state, whatsappCallWindow ->
+        state.copy(whatsappCallWindow = whatsappCallWindow)
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
@@ -98,6 +103,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     suspend fun extendSchedule(id: Long, draft: ScheduleDraft): String {
         repository.extendSchedule(id, draft)
         return "Blocking window extended."
+    }
+
+    fun updateWhatsappCallWindow(
+        startMinute: Int,
+        endMinute: Int
+    ): String {
+        repository.setWhatsappCallWindow(
+            startMinute = startMinute,
+            endMinute = endMinute
+        )
+        return "WhatsApp call blocking window updated."
     }
 
     fun toUserMessage(error: Throwable): String {

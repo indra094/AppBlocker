@@ -20,6 +20,7 @@ import com.indrajeet.appblocker.blocking.RuleSnapshot
 import com.indrajeet.appblocker.ui.BlockedActivity
 import com.indrajeet.appblocker.util.HostNormalizer
 import com.indrajeet.appblocker.util.WhatsappCallWindow
+import com.indrajeet.appblocker.util.WhatsappCallWindowConfig
 import java.time.ZonedDateTime
 import java.util.Locale
 import kotlinx.coroutines.CoroutineScope
@@ -38,6 +39,9 @@ class BlockAccessibilityService : AccessibilityService() {
 
     @Volatile
     private var currentPackage: String? = null
+
+    @Volatile
+    private var whatsappCallWindow: WhatsappCallWindowConfig = WhatsappCallWindow.defaultConfig
 
     private val settingsPackages = mutableSetOf<String>()
 
@@ -98,6 +102,11 @@ class BlockAccessibilityService : AccessibilityService() {
             serviceScope.launch {
                 repository.observeRuleSnapshot().collectLatest {
                     ruleSnapshot = it
+                }
+            }
+            serviceScope.launch {
+                repository.observeWhatsappCallWindow().collectLatest {
+                    whatsappCallWindow = it
                 }
             }
             mainHandler.post(ticker)
@@ -218,7 +227,8 @@ class BlockAccessibilityService : AccessibilityService() {
         activePackage: String,
         now: ZonedDateTime
     ): Boolean {
-        if (activePackage !in WHATSAPP_PACKAGES || !WhatsappCallWindow.isActive(now)) {
+        val currentWindow = whatsappCallWindow
+        if (activePackage !in WHATSAPP_PACKAGES || !WhatsappCallWindow.isActive(now, currentWindow)) {
             return false
         }
         val root = rootInActiveWindow ?: return false
@@ -229,9 +239,9 @@ class BlockAccessibilityService : AccessibilityService() {
         val disconnected = tapWhatsappEndCall(root)
         triggerBlock(
             reason = if (disconnected) {
-                "WhatsApp call ended during the 8:30 PM to 6:30 AM window"
+                "WhatsApp call ended during the ${WhatsappCallWindow.description(currentWindow)} window"
             } else {
-                "WhatsApp call detected during the 8:30 PM to 6:30 AM window"
+                "WhatsApp call detected during the ${WhatsappCallWindow.description(currentWindow)} window"
             },
             target = activePackage,
             forceHome = false,
@@ -260,7 +270,7 @@ class BlockAccessibilityService : AccessibilityService() {
     }
 
     private fun isWithinWhatsappCallWindow(): Boolean {
-        return WhatsappCallWindow.isActive(ZonedDateTime.now())
+        return WhatsappCallWindow.isActive(ZonedDateTime.now(), whatsappCallWindow)
     }
 
     private fun isProtectedSelfManagementScreen(): Boolean {

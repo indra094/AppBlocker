@@ -2,6 +2,7 @@ package com.indrajeet.appblocker.data
 
 import com.indrajeet.appblocker.blocking.RuleSnapshot
 import com.indrajeet.appblocker.util.HostNormalizer
+import com.indrajeet.appblocker.util.WhatsappCallWindowConfig
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
@@ -59,6 +60,24 @@ class BlockerRepository(
 
     fun setSettingsGuardEnabled(enabled: Boolean) {
         settingsGuardStore.setSettingsBlocked(enabled)
+    }
+
+    fun observeWhatsappCallWindow(): Flow<WhatsappCallWindowConfig> {
+        return settingsGuardStore.observeWhatsappCallWindow()
+    }
+
+    fun getWhatsappCallWindow(): WhatsappCallWindowConfig {
+        return settingsGuardStore.getWhatsappCallWindow()
+    }
+
+    fun setWhatsappCallWindow(
+        startMinute: Int,
+        endMinute: Int
+    ) {
+        settingsGuardStore.setWhatsappCallWindow(
+            startMinute = startMinute,
+            endMinute = endMinute
+        )
     }
 
     suspend fun addBucket(name: String): Long {

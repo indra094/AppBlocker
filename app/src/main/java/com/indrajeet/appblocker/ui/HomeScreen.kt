@@ -73,6 +73,8 @@ import com.indrajeet.appblocker.util.DayMask
 import com.indrajeet.appblocker.util.InstalledApp
 import com.indrajeet.appblocker.util.ScreenTimeTracker
 import com.indrajeet.appblocker.util.ScheduleFormatter
+import com.indrajeet.appblocker.util.WhatsappCallWindow
+import com.indrajeet.appblocker.util.WhatsappCallWindowConfig
 import com.indrajeet.appblocker.util.WeeklyUsageSummary
 import java.time.DayOfWeek
 import java.time.LocalDate
@@ -113,6 +115,7 @@ fun HomeScreen(
     var showManagementDialog by rememberSaveable { mutableStateOf(false) }
     var showReliabilityDialog by rememberSaveable { mutableStateOf(true) }
     var showWeeklyUsageDialog by rememberSaveable { mutableStateOf(false) }
+    var showWhatsappCallWindowDialog by rememberSaveable { mutableStateOf(false) }
     var appBucket by remember { mutableStateOf<BlockBucketEntity?>(null) }
     var websiteBucket by remember { mutableStateOf<BlockBucketEntity?>(null) }
     var scheduleBucket by remember { mutableStateOf<BlockBucketEntity?>(null) }
@@ -145,6 +148,8 @@ fun HomeScreen(
                     openNotificationAccessSettings = openNotificationAccessSettings,
                     openUsageAccessSettings = openUsageAccessSettings,
                     onShowWeeklyUsage = { showWeeklyUsageDialog = true },
+                    whatsappCallWindow = uiState.whatsappCallWindow,
+                    onConfigureWhatsappCallWindow = { showWhatsappCallWindowDialog = true },
                     openManagementDialog = { showManagementDialog = true },
                     isDeviceAdminActive = uiState.isDeviceAdminActive,
                     isDeviceOwner = uiState.isDeviceOwner
@@ -295,6 +300,28 @@ fun HomeScreen(
             onDismiss = { showWeeklyUsageDialog = false }
         )
     }
+
+    if (showWhatsappCallWindowDialog) {
+        WhatsappCallWindowDialog(
+            config = uiState.whatsappCallWindow,
+            onDismiss = { showWhatsappCallWindowDialog = false },
+            onSave = { startMinute, endMinute ->
+                scope.launch {
+                    runCatching {
+                        viewModel.updateWhatsappCallWindow(
+                            startMinute = startMinute,
+                            endMinute = endMinute
+                        )
+                    }.onSuccess {
+                        showWhatsappCallWindowDialog = false
+                        snackbarHostState.showSnackbar(it)
+                    }.onFailure {
+                        snackbarHostState.showSnackbar(viewModel.toUserMessage(it))
+                    }
+                }
+            }
+        )
+    }
 }
 
 @Composable
@@ -309,6 +336,8 @@ private fun PermissionCard(
     openNotificationAccessSettings: () -> Unit,
     openUsageAccessSettings: () -> Unit,
     onShowWeeklyUsage: () -> Unit,
+    whatsappCallWindow: WhatsappCallWindowConfig,
+    onConfigureWhatsappCallWindow: () -> Unit,
     openManagementDialog: () -> Unit,
     isDeviceAdminActive: Boolean,
     isDeviceOwner: Boolean
@@ -379,15 +408,34 @@ private fun PermissionCard(
                     Text("Notification access (WhatsApp silence)", fontWeight = FontWeight.Bold)
                     Text(
                         if (notificationAccessEnabled) {
-                            "Enabled. WhatsApp notifications can be silenced during active WhatsApp block windows, and foreground WhatsApp calls are ended between 8:30 PM and 6:30 AM."
+                            "Enabled. WhatsApp notifications can be silenced during active WhatsApp block windows, and foreground WhatsApp calls are ended during the ${WhatsappCallWindow.description(whatsappCallWindow)} window."
                         } else {
-                            "Enable notification access so AppBlocker can cancel WhatsApp notifications during active WhatsApp block windows. WhatsApp call ending between 8:30 PM and 6:30 AM still depends on Accessibility."
+                            "Enable notification access so AppBlocker can cancel WhatsApp notifications during active WhatsApp block windows. WhatsApp call ending during the ${WhatsappCallWindow.description(whatsappCallWindow)} window still depends on Accessibility."
                         }
                     )
                 }
             }
             OutlinedButton(onClick = openNotificationAccessSettings) {
                 Text(if (notificationAccessEnabled) "Review notification access" else "Enable notification access")
+            }
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Lock,
+                    contentDescription = null,
+                    modifier = Modifier.size(24.dp)
+                )
+                Column {
+                    Text("WhatsApp call blocking window", fontWeight = FontWeight.Bold)
+                    Text(
+                        "Foreground WhatsApp calls are ended during ${WhatsappCallWindow.description(whatsappCallWindow)}. These times use Pacific Time."
+                    )
+                }
+            }
+            OutlinedButton(onClick = onConfigureWhatsappCallWindow) {
+                Text("Configure WhatsApp call window")
             }
             Row(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -451,6 +499,71 @@ private fun PermissionCard(
             }
         }
     }
+}
+
+@Composable
+private fun WhatsappCallWindowDialog(
+    config: WhatsappCallWindowConfig,
+    onDismiss: () -> Unit,
+    onSave: (Int, Int) -> Unit
+) {
+    var startText by rememberSaveable { mutableStateOf(ScheduleFormatter.timeText(config.startMinute)) }
+    var endText by rememberSaveable { mutableStateOf(ScheduleFormatter.timeText(config.endMinute)) }
+    val dialogScope = rememberCoroutineScope()
+    val dialogSnackbarHostState = remember { SnackbarHostState() }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    dialogScope.launch {
+                        runCatching {
+                            onSave(
+                                ScheduleFormatter.parseClock(startText),
+                                ScheduleFormatter.parseClock(endText)
+                            )
+                        }.onFailure {
+                            dialogSnackbarHostState.showSnackbar(
+                                it.message ?: "Invalid WhatsApp call window."
+                            )
+                        }
+                    }
+                }
+            ) {
+                Text("Save")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+        title = { Text("WhatsApp call blocking window") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                SnackbarHost(dialogSnackbarHostState)
+                Text(
+                    "Set the Pacific Time window when AppBlocker should end foreground WhatsApp calls."
+                )
+                OutlinedTextField(
+                    value = startText,
+                    onValueChange = { startText = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Start time") },
+                    placeholder = { Text("08:00") }
+                )
+                OutlinedTextField(
+                    value = endText,
+                    onValueChange = { endText = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("End time") },
+                    placeholder = { Text("06:30") }
+                )
+                Text(
+                    "Use 24-hour HH:MM input. If the end time is earlier than the start time, the window continues past midnight."
+                )
+            }
+        }
+    )
 }
 
 @Composable
