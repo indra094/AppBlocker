@@ -113,7 +113,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             startMinute = startMinute,
             endMinute = endMinute
         )
-        return "WhatsApp call blocking window updated."
+        return "WhatsApp call allowed window updated."
     }
 
     fun toUserMessage(error: Throwable): String {

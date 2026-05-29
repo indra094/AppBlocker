@@ -428,14 +428,14 @@ private fun PermissionCard(
                     modifier = Modifier.size(24.dp)
                 )
                 Column {
-                    Text("WhatsApp call blocking window", fontWeight = FontWeight.Bold)
+                    Text("WhatsApp call allowed window", fontWeight = FontWeight.Bold)
                     Text(
                         "Foreground WhatsApp calls are allowed during ${WhatsappCallWindow.description(whatsappCallWindow)}. Outside that Pacific Time window, AppBlocker ends them."
                     )
                 }
             }
             OutlinedButton(onClick = onConfigureWhatsappCallWindow) {
-                Text("Configure WhatsApp call window")
+                Text("Configure allowed call window")
             }
             Row(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -525,7 +525,7 @@ private fun WhatsappCallWindowDialog(
                             )
                         }.onFailure {
                             dialogSnackbarHostState.showSnackbar(
-                                it.message ?: "Invalid WhatsApp call window."
+                                it.message ?: "Invalid WhatsApp allowed window."
                             )
                         }
                     }
@@ -537,12 +537,12 @@ private fun WhatsappCallWindowDialog(
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("Cancel") }
         },
-        title = { Text("WhatsApp call blocking window") },
+        title = { Text("WhatsApp call allowed window") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 SnackbarHost(dialogSnackbarHostState)
                 Text(
-                    "Set the Pacific Time window when WhatsApp calls are allowed. Outside this window, AppBlocker ends foreground WhatsApp calls."
+                    "Set the Pacific Time window when WhatsApp calls are allowed. Outside this window, AppBlocker ends foreground WhatsApp calls. Example: 08:00 to 04:00 means calls are cut from 4:00 AM until 8:00 AM Pacific."
                 )
                 OutlinedTextField(
                     value = startText,
