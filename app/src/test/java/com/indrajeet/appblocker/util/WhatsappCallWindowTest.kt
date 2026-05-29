@@ -33,6 +33,13 @@ class WhatsappCallWindowTest {
     }
 
     @Test
+    fun `calls should disconnect outside default window`() {
+        assertTrue(WhatsappCallWindow.shouldDisconnect(LocalTime.of(7, 59), defaultConfig))
+        assertFalse(WhatsappCallWindow.shouldDisconnect(LocalTime.of(8, 0), defaultConfig))
+        assertTrue(WhatsappCallWindow.shouldDisconnect(LocalTime.of(6, 30), defaultConfig))
+    }
+
+    @Test
     fun `window can be configured for a same-day range`() {
         val config = WhatsappCallWindow.sanitize(
             startMinute = 9 * 60,
@@ -42,6 +49,9 @@ class WhatsappCallWindowTest {
         assertFalse(WhatsappCallWindow.isActive(LocalTime.of(8, 59), config))
         assertTrue(WhatsappCallWindow.isActive(LocalTime.NOON, config))
         assertFalse(WhatsappCallWindow.isActive(LocalTime.of(17, 0), config))
+        assertTrue(WhatsappCallWindow.shouldDisconnect(LocalTime.of(8, 59), config))
+        assertFalse(WhatsappCallWindow.shouldDisconnect(LocalTime.NOON, config))
+        assertTrue(WhatsappCallWindow.shouldDisconnect(LocalTime.of(17, 0), config))
     }
 
     @Test

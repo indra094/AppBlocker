@@ -38,6 +38,14 @@ object WhatsappCallWindow {
         return isActive(minuteOfDay, config)
     }
 
+    fun shouldDisconnect(now: ZonedDateTime, config: WhatsappCallWindowConfig): Boolean {
+        return !isActive(now, config)
+    }
+
+    fun shouldDisconnect(time: LocalTime, config: WhatsappCallWindowConfig): Boolean {
+        return !isActive(time, config)
+    }
+
     fun description(config: WhatsappCallWindowConfig): String {
         val daySuffix = if (crossesMidnight(config)) " the next day" else ""
         return "${displayTime(config.startMinute)} Pacific Time until ${displayTime(config.endMinute)} Pacific Time$daySuffix"

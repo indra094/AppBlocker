@@ -408,9 +408,9 @@ private fun PermissionCard(
                     Text("Notification access (WhatsApp silence)", fontWeight = FontWeight.Bold)
                     Text(
                         if (notificationAccessEnabled) {
-                            "Enabled. WhatsApp notifications can be silenced during active WhatsApp block windows, and foreground WhatsApp calls are ended during the ${WhatsappCallWindow.description(whatsappCallWindow)} window."
+                            "Enabled. WhatsApp notifications can be silenced during active WhatsApp block windows, and foreground WhatsApp calls are ended outside the allowed ${WhatsappCallWindow.description(whatsappCallWindow)} window."
                         } else {
-                            "Enable notification access so AppBlocker can cancel WhatsApp notifications during active WhatsApp block windows. WhatsApp call ending during the ${WhatsappCallWindow.description(whatsappCallWindow)} window still depends on Accessibility."
+                            "Enable notification access so AppBlocker can cancel WhatsApp notifications during active WhatsApp block windows. WhatsApp call ending outside the allowed ${WhatsappCallWindow.description(whatsappCallWindow)} window still depends on Accessibility."
                         }
                     )
                 }
@@ -430,7 +430,7 @@ private fun PermissionCard(
                 Column {
                     Text("WhatsApp call blocking window", fontWeight = FontWeight.Bold)
                     Text(
-                        "Foreground WhatsApp calls are ended during ${WhatsappCallWindow.description(whatsappCallWindow)}. These times use Pacific Time."
+                        "Foreground WhatsApp calls are allowed during ${WhatsappCallWindow.description(whatsappCallWindow)}. Outside that Pacific Time window, AppBlocker ends them."
                     )
                 }
             }
@@ -542,7 +542,7 @@ private fun WhatsappCallWindowDialog(
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 SnackbarHost(dialogSnackbarHostState)
                 Text(
-                    "Set the Pacific Time window when AppBlocker should end foreground WhatsApp calls."
+                    "Set the Pacific Time window when WhatsApp calls are allowed. Outside this window, AppBlocker ends foreground WhatsApp calls."
                 )
                 OutlinedTextField(
                     value = startText,
@@ -559,7 +559,7 @@ private fun WhatsappCallWindowDialog(
                     placeholder = { Text("06:30") }
                 )
                 Text(
-                    "Use 24-hour HH:MM input. If the end time is earlier than the start time, the window continues past midnight."
+                    "Use 24-hour HH:MM input. If the end time is earlier than the start time, the allowed window continues past midnight."
                 )
             }
         }

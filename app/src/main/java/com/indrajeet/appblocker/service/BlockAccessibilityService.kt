@@ -151,7 +151,7 @@ class BlockAccessibilityService : AccessibilityService() {
             }
             if (isWhatsappActivityEvent) {
                 handleWhatsappActivityEvent(currentEvent)
-                if (packageName in WHATSAPP_PACKAGES && isWithinWhatsappCallWindow()) {
+                if (packageName in WHATSAPP_PACKAGES && isOutsideWhatsappCallWindow()) {
                     return
                 }
             }
@@ -183,7 +183,7 @@ class BlockAccessibilityService : AccessibilityService() {
         }
         val snapshot = ruleSnapshot
         val now = ZonedDateTime.now()
-        if (disconnectWhatsappCallInBlockedWindow(activePackage, now)) {
+        if (disconnectWhatsappCallOutsideAllowedWindow(activePackage, now)) {
             return
         }
         if (snapshot.buckets.isEmpty()) {
@@ -223,12 +223,12 @@ class BlockAccessibilityService : AccessibilityService() {
         }
     }
 
-    private fun disconnectWhatsappCallInBlockedWindow(
+    private fun disconnectWhatsappCallOutsideAllowedWindow(
         activePackage: String,
         now: ZonedDateTime
     ): Boolean {
         val currentWindow = whatsappCallWindow
-        if (activePackage !in WHATSAPP_PACKAGES || !WhatsappCallWindow.isActive(now, currentWindow)) {
+        if (activePackage !in WHATSAPP_PACKAGES || !WhatsappCallWindow.shouldDisconnect(now, currentWindow)) {
             return false
         }
         val root = rootInActiveWindow ?: return false
@@ -239,9 +239,9 @@ class BlockAccessibilityService : AccessibilityService() {
         val disconnected = tapWhatsappEndCall(root)
         triggerBlock(
             reason = if (disconnected) {
-                "WhatsApp call ended during the ${WhatsappCallWindow.description(currentWindow)} window"
+                "WhatsApp call ended outside the allowed ${WhatsappCallWindow.description(currentWindow)} window"
             } else {
-                "WhatsApp call detected during the ${WhatsappCallWindow.description(currentWindow)} window"
+                "WhatsApp call detected outside the allowed ${WhatsappCallWindow.description(currentWindow)} window"
             },
             target = activePackage,
             forceHome = false,
@@ -252,7 +252,7 @@ class BlockAccessibilityService : AccessibilityService() {
     }
 
     private fun handleWhatsappActivityEvent(event: AccessibilityEvent) {
-        if (!isWithinWhatsappCallWindow()) {
+        if (!isOutsideWhatsappCallWindow()) {
             return
         }
         val packageName = event.packageName?.toString() ?: return
@@ -265,12 +265,12 @@ class BlockAccessibilityService : AccessibilityService() {
             return
         }
         if (looksLikeWhatsappCall(root)) {
-            disconnectWhatsappCallInBlockedWindow(activePackage, ZonedDateTime.now())
+            disconnectWhatsappCallOutsideAllowedWindow(activePackage, ZonedDateTime.now())
         }
     }
 
-    private fun isWithinWhatsappCallWindow(): Boolean {
-        return WhatsappCallWindow.isActive(ZonedDateTime.now(), whatsappCallWindow)
+    private fun isOutsideWhatsappCallWindow(): Boolean {
+        return WhatsappCallWindow.shouldDisconnect(ZonedDateTime.now(), whatsappCallWindow)
     }
 
     private fun isProtectedSelfManagementScreen(): Boolean {
