@@ -1,10 +1,17 @@
 package com.indrajeet.appblocker.service
 
+import android.app.Notification
+import android.os.Handler
+import android.os.Looper
+import android.provider.Settings
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import com.indrajeet.appblocker.AppBlockerApplication
 import com.indrajeet.appblocker.blocking.RuleEvaluator
 import com.indrajeet.appblocker.blocking.RuleSnapshot
+import com.indrajeet.appblocker.util.WhatsappCallNotificationHeuristics
+import com.indrajeet.appblocker.util.WhatsappCallWindow
+import com.indrajeet.appblocker.util.WhatsappCallWindowConfig
 import java.time.ZonedDateTime
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -15,10 +22,24 @@ import kotlinx.coroutines.launch
 
 class BlockNotificationListenerService : NotificationListenerService() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val mainHandler = Handler(Looper.getMainLooper())
     private var observerStarted: Boolean = false
 
     @Volatile
     private var ruleSnapshot: RuleSnapshot = RuleSnapshot(emptyList())
+
+    @Volatile
+    private var whatsappCallWindow: WhatsappCallWindowConfig = WhatsappCallWindow.defaultConfig
+
+    private var lastPromotedWhatsappCallKey: String? = null
+    private var lastPromotedWhatsappCallAt: Long = 0L
+
+    private val ticker = object : Runnable {
+        override fun run() {
+            runCatching { evaluateActiveWhatsappNotifications() }
+            mainHandler.postDelayed(this, WHATSAPP_CALL_TICK_MS)
+        }
+    }
 
     override fun onListenerConnected() {
         super.onListenerConnected()
@@ -33,6 +54,13 @@ class BlockNotificationListenerService : NotificationListenerService() {
                 cancelActiveBlockedWhatsappNotifications()
             }
         }
+        serviceScope.launch {
+            repository.observeWhatsappCallWindow().collectLatest {
+                whatsappCallWindow = it
+                evaluateActiveWhatsappNotifications()
+            }
+        }
+        mainHandler.post(ticker)
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
@@ -42,16 +70,17 @@ class BlockNotificationListenerService : NotificationListenerService() {
             return
         }
         val snapshot = ruleSnapshot
-        if (snapshot.buckets.isEmpty()) {
-            return
+        if (snapshot.buckets.isNotEmpty()) {
+            val now = ZonedDateTime.now()
+            if (RuleEvaluator.activeBucketForPackage(snapshot, packageName, now) != null) {
+                runCatching { cancelNotification(notification.key) }
+            }
         }
-        val now = ZonedDateTime.now()
-        if (RuleEvaluator.activeBucketForPackage(snapshot, packageName, now) != null) {
-            runCatching { cancelNotification(notification.key) }
-        }
+        maybePromoteBlockedWhatsappCall(notification)
     }
 
     override fun onDestroy() {
+        mainHandler.removeCallbacks(ticker)
         serviceScope.cancel()
         super.onDestroy()
     }
@@ -72,7 +101,81 @@ class BlockNotificationListenerService : NotificationListenerService() {
             }
     }
 
+    private fun evaluateActiveWhatsappNotifications() {
+        cancelActiveBlockedWhatsappNotifications()
+        activeNotifications
+            .orEmpty()
+            .asSequence()
+            .filter { it.packageName in WHATSAPP_PACKAGES }
+            .forEach(::maybePromoteBlockedWhatsappCall)
+    }
+
+    private fun maybePromoteBlockedWhatsappCall(notification: StatusBarNotification) {
+        if (!isAccessibilityServiceEnabled()) {
+            return
+        }
+        if (!WhatsappCallWindow.shouldDisconnect(ZonedDateTime.now(), whatsappCallWindow)) {
+            return
+        }
+        if (!looksLikeWhatsappCallNotification(notification)) {
+            return
+        }
+        if (!shouldPromoteWhatsappCallNotification(notification.key)) {
+            return
+        }
+        sendCallSurfaceIntent(notification.notification)
+    }
+
+    private fun looksLikeWhatsappCallNotification(notification: StatusBarNotification): Boolean {
+        val payload = notification.notification
+        val extras = payload.extras
+        return WhatsappCallNotificationHeuristics.looksLikeCallNotification(
+            category = payload.category,
+            isOngoing = payload.flags and Notification.FLAG_ONGOING_EVENT != 0,
+            fields = listOf(
+                payload.tickerText?.toString(),
+                extras?.getCharSequence(Notification.EXTRA_TITLE)?.toString(),
+                extras?.getCharSequence(Notification.EXTRA_TEXT)?.toString(),
+                extras?.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString(),
+                extras?.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString()
+            )
+        )
+    }
+
+    private fun shouldPromoteWhatsappCallNotification(notificationKey: String): Boolean {
+        val now = System.currentTimeMillis()
+        if (
+            notificationKey == lastPromotedWhatsappCallKey &&
+            now - lastPromotedWhatsappCallAt < WHATSAPP_CALL_PROMOTION_COOLDOWN_MS
+        ) {
+            return false
+        }
+        lastPromotedWhatsappCallKey = notificationKey
+        lastPromotedWhatsappCallAt = now
+        return true
+    }
+
+    private fun sendCallSurfaceIntent(notification: Notification) {
+        val intents = listOfNotNull(notification.fullScreenIntent, notification.contentIntent)
+        intents.firstOrNull { pendingIntent ->
+            runCatching { pendingIntent.send() }.isSuccess
+        }
+    }
+
+    private fun isAccessibilityServiceEnabled(): Boolean {
+        val enabledServices = Settings.Secure.getString(
+            contentResolver,
+            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+        ).orEmpty()
+        return enabledServices.contains(
+            "$packageName/${BlockAccessibilityService::class.java.name}",
+            ignoreCase = true
+        )
+    }
+
     companion object {
+        private const val WHATSAPP_CALL_TICK_MS = 5_000L
+        private const val WHATSAPP_CALL_PROMOTION_COOLDOWN_MS = 10_000L
         private val WHATSAPP_PACKAGES = setOf(
             "com.whatsapp",
             "com.whatsapp.w4b"

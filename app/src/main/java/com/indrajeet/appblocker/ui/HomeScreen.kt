@@ -408,9 +408,9 @@ private fun PermissionCard(
                     Text("Notification access (WhatsApp silence)", fontWeight = FontWeight.Bold)
                     Text(
                         if (notificationAccessEnabled) {
-                            "Enabled. WhatsApp notifications can be silenced during active WhatsApp block windows, and foreground WhatsApp calls are ended outside the allowed ${WhatsappCallWindow.description(whatsappCallWindow)} window."
+                            "Enabled. WhatsApp notifications can be silenced during active WhatsApp block windows, and AppBlocker can surface ongoing background WhatsApp calls so Accessibility can end them outside the allowed ${WhatsappCallWindow.description(whatsappCallWindow)} window."
                         } else {
-                            "Enable notification access so AppBlocker can cancel WhatsApp notifications during active WhatsApp block windows. WhatsApp call ending outside the allowed ${WhatsappCallWindow.description(whatsappCallWindow)} window still depends on Accessibility."
+                            "Enable notification access so AppBlocker can cancel WhatsApp notifications during active WhatsApp block windows and surface ongoing background WhatsApp calls when the blocked period starts. WhatsApp call ending outside the allowed ${WhatsappCallWindow.description(whatsappCallWindow)} window still depends on Accessibility."
                         }
                     )
                 }

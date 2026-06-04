@@ -13,7 +13,7 @@
 - Blocks selected websites in supported browsers by reading the visible address bar through the same accessibility service.
 - Redirects blocked website hits to `https://github.com` instead of force-closing the browser.
 - Silences WhatsApp / WhatsApp Business notifications during active WhatsApp app-block windows when Notification Access is enabled.
-- Best-effort watches WhatsApp / WhatsApp Business activity and allows calls only during a configurable Pacific Time window (default `8:00 AM` to `6:30 AM` the next day). Outside that window, it ends foreground calls by using the accessibility service to press the in-call end button without bouncing other apps to Home.
+- Best-effort watches WhatsApp / WhatsApp Business activity and allows calls only during a configurable Pacific Time window (default `8:00 AM` to `6:30 AM` the next day). Outside that window, it ends foreground calls and can surface an ongoing background call from the WhatsApp notification so the accessibility service can press the in-call end button without bouncing other apps to Home.
 - Shows a weekly screen-time tracker when Usage Access is enabled.
 - Stores rules locally with Room.
 - Treats targets as append-only.
@@ -32,8 +32,8 @@ This only works on a device that is freshly reset or otherwise meets Android's d
 ## Important setup steps
 
 0. In the same PowerShell session, set a release token used by uninstall script + app build:
-   - `$env:APPBLOCKER_RELEASE_TOKEN = "AxrJEL8KwLu18w6QWtxHFjzCMKfu1NzsTkw1Vu2lBKI"`
-   - `$env:ORG_GRADLE_PROJECT_appblockerLaptopReleaseToken = $env:APPBLOCKER_RELEASE_TOKEN`
+   - $env:APPBLOCKER_RELEASE_TOKEN = "AxrJEL8KwLu18w6QWtxHFjzCMKfu1NzsTkw1Vu2lBKI"
+   - $env:ORG_GRADLE_PROJECT_appblockerLaptopReleaseToken = $env:APPBLOCKER_RELEASE_TOKEN
 1. Build and install:
    - `scripts/build-debug.ps1`
    - `scripts/install.ps1`
@@ -62,6 +62,7 @@ If WhatsApp notifications are not silenced during block windows, the most common
 If WhatsApp calls are not ended outside the configured Pacific Time window, the most common causes are:
 
 - accessibility is off
+- notification access is off, so an ongoing background call could not be surfaced when the blocked period started
 - the in-call WhatsApp UI did not expose an accessible end-call control on that device/build
 - the call was not in the foreground when the check ran
 
