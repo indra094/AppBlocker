@@ -149,7 +149,12 @@ fun HomeScreen(
                     openUsageAccessSettings = openUsageAccessSettings,
                     onShowWeeklyUsage = { showWeeklyUsageDialog = true },
                     whatsappCallWindow = uiState.whatsappCallWindow,
-                    onConfigureWhatsappCallWindow = { showWhatsappCallWindowDialog = true },
+                    isWhatsappCallWindowConfigured = uiState.isWhatsappCallWindowConfigured,
+                    onConfigureWhatsappCallWindow = {
+                        if (!uiState.isWhatsappCallWindowConfigured) {
+                            showWhatsappCallWindowDialog = true
+                        }
+                    },
                     openManagementDialog = { showManagementDialog = true },
                     isDeviceAdminActive = uiState.isDeviceAdminActive,
                     isDeviceOwner = uiState.isDeviceOwner
@@ -337,6 +342,7 @@ private fun PermissionCard(
     openUsageAccessSettings: () -> Unit,
     onShowWeeklyUsage: () -> Unit,
     whatsappCallWindow: WhatsappCallWindowConfig,
+    isWhatsappCallWindowConfigured: Boolean,
     onConfigureWhatsappCallWindow: () -> Unit,
     openManagementDialog: () -> Unit,
     isDeviceAdminActive: Boolean,
@@ -430,12 +436,25 @@ private fun PermissionCard(
                 Column {
                     Text("WhatsApp call allowed window", fontWeight = FontWeight.Bold)
                     Text(
-                        "Foreground WhatsApp calls are allowed during ${WhatsappCallWindow.description(whatsappCallWindow)}. Outside that Pacific Time window, AppBlocker ends them."
+                        if (isWhatsappCallWindowConfigured) {
+                            "Foreground WhatsApp calls are allowed during ${WhatsappCallWindow.description(whatsappCallWindow)}. This window is locked."
+                        } else {
+                            "Foreground WhatsApp calls are allowed during ${WhatsappCallWindow.description(whatsappCallWindow)}. This can only be configured once."
+                        }
                     )
                 }
             }
-            OutlinedButton(onClick = onConfigureWhatsappCallWindow) {
-                Text("Configure allowed call window")
+            OutlinedButton(
+                onClick = onConfigureWhatsappCallWindow,
+                enabled = !isWhatsappCallWindowConfigured
+            ) {
+                Text(
+                    if (isWhatsappCallWindowConfigured) {
+                        "Allowed call window locked"
+                    } else {
+                        "Configure allowed call window"
+                    }
+                )
             }
             Row(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -468,7 +487,7 @@ private fun PermissionCard(
             Text("Management protection", fontWeight = FontWeight.Bold)
             Text(
                 if (isDeviceAdminActive && accessibilityEnabled) {
-                    "Active. AppBlocker automatically blocks settings screens that can disable AppBlocker admin or uninstall paths."
+                    "Active. AppBlocker automatically blocks settings screens that can turn off its accessibility service."
                 } else {
                     "Pending. Enable both accessibility and device admin to activate automatic management protection."
                 },
@@ -480,7 +499,7 @@ private fun PermissionCard(
                 }
             } else {
                 Text(
-                    "Device admin is enabled and protected. Disabling it from settings is blocked by policy.",
+                    "Device admin is enabled. Accessibility changes are blocked while protection is active.",
                     style = MaterialTheme.typography.bodySmall
                 )
             }
@@ -929,7 +948,7 @@ private fun ManagementSetupDialog(
                 }
                 if (isDeviceAdminActive) {
                     Text(
-                        "Device admin disable screens are blocked while protection is active.",
+                        "Accessibility turn-off screens are blocked while protection is active.",
                         style = MaterialTheme.typography.bodySmall
                     )
                 } else {

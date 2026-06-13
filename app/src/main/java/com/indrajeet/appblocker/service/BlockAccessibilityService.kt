@@ -171,9 +171,9 @@ class BlockAccessibilityService : AccessibilityService() {
     private fun evaluateCurrentContext() {
         val activePackage = activeWindowPackageName() ?: currentPackage ?: return
         currentPackage = activePackage
-        if (activePackage in settingsPackages && isProtectedSelfManagementScreen()) {
+        if (activePackage in settingsPackages && isProtectedAccessibilityManagementScreen()) {
             triggerBlock(
-                reason = "Protected setting blocked",
+                reason = "Protected accessibility setting blocked",
                 target = activePackage,
                 forceHome = true,
                 minIntervalMs = 0,
@@ -273,7 +273,7 @@ class BlockAccessibilityService : AccessibilityService() {
         return WhatsappCallWindow.shouldDisconnect(ZonedDateTime.now(), whatsappCallWindow)
     }
 
-    private fun isProtectedSelfManagementScreen(): Boolean {
+    private fun isProtectedAccessibilityManagementScreen(): Boolean {
         if (!isManagementProtectionActive()) {
             return false
         }
@@ -284,23 +284,18 @@ class BlockAccessibilityService : AccessibilityService() {
 
         val appMarkers = listOf(
             packageName.lowercase(Locale.US),
-            getString(R.string.app_name).lowercase(Locale.US)
+            getString(R.string.app_name).lowercase(Locale.US),
+            getString(R.string.service_label).lowercase(Locale.US)
         )
-        val dangerMarkers = listOf(
-            "uninstall",
-            "remove",
-            "deactivate",
-            "turn off",
-            "device admin",
-            "device administrators",
-            "device admin apps",
-            "app info",
-            "app details",
-            "special app access"
+        val accessibilityMarkers = listOf(
+            "accessibility",
+            "accessibility service",
+            "accessibility services",
+            "downloaded apps"
         )
         val hasAppMarker = appMarkers.any { normalized.contains(it) }
-        val hasDangerMarker = dangerMarkers.any { normalized.contains(it) }
-        return hasAppMarker && hasDangerMarker
+        val hasAccessibilityMarker = accessibilityMarkers.any { normalized.contains(it) }
+        return hasAppMarker && hasAccessibilityMarker
     }
 
     private fun isManagementProtectionActive(): Boolean {

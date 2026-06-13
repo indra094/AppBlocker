@@ -12,6 +12,7 @@ class SettingsGuardStore(context: Context) {
         prefs.getBoolean(KEY_BLOCK_DEVICE_SETTINGS, false)
     )
     private val whatsappCallWindowState = MutableStateFlow(readWhatsappCallWindow())
+    private val whatsappCallWindowConfiguredState = MutableStateFlow(isWhatsappCallWindowConfigured())
 
     fun observeSettingsBlocked(): StateFlow<Boolean> = settingsBlockedState
 
@@ -26,10 +27,21 @@ class SettingsGuardStore(context: Context) {
 
     fun getWhatsappCallWindow(): WhatsappCallWindowConfig = whatsappCallWindowState.value
 
+    fun observeWhatsappCallWindowConfigured(): StateFlow<Boolean> = whatsappCallWindowConfiguredState
+
+    fun isWhatsappCallWindowConfigured(): Boolean {
+        return prefs.getBoolean(KEY_WHATSAPP_CALL_WINDOW_CONFIGURED, false) ||
+            prefs.contains(KEY_WHATSAPP_CALL_WINDOW_START_MINUTE) ||
+            prefs.contains(KEY_WHATSAPP_CALL_WINDOW_END_MINUTE)
+    }
+
     fun setWhatsappCallWindow(
         startMinute: Int,
         endMinute: Int
     ) {
+        if (whatsappCallWindowConfiguredState.value) {
+            throw PolicyViolationException("WhatsApp call allowed window is already locked.")
+        }
         val config = WhatsappCallWindow.sanitize(
             startMinute = startMinute,
             endMinute = endMinute
@@ -37,8 +49,10 @@ class SettingsGuardStore(context: Context) {
         prefs.edit()
             .putInt(KEY_WHATSAPP_CALL_WINDOW_START_MINUTE, config.startMinute)
             .putInt(KEY_WHATSAPP_CALL_WINDOW_END_MINUTE, config.endMinute)
+            .putBoolean(KEY_WHATSAPP_CALL_WINDOW_CONFIGURED, true)
             .apply()
         whatsappCallWindowState.value = config
+        whatsappCallWindowConfiguredState.value = true
     }
 
     private fun readWhatsappCallWindow(): WhatsappCallWindowConfig {
@@ -61,5 +75,7 @@ class SettingsGuardStore(context: Context) {
             "whatsapp_call_window_start_minute"
         private const val KEY_WHATSAPP_CALL_WINDOW_END_MINUTE =
             "whatsapp_call_window_end_minute"
+        private const val KEY_WHATSAPP_CALL_WINDOW_CONFIGURED =
+            "whatsapp_call_window_configured"
     }
 }

@@ -33,7 +33,8 @@ data class HomeUiState(
     val weeklyUsage: List<WeeklyUsageSummary> = emptyList(),
     val isDeviceAdminActive: Boolean = false,
     val isDeviceOwner: Boolean = false,
-    val whatsappCallWindow: WhatsappCallWindowConfig = WhatsappCallWindow.defaultConfig
+    val whatsappCallWindow: WhatsappCallWindowConfig = WhatsappCallWindow.defaultConfig,
+    val isWhatsappCallWindowConfigured: Boolean = false
 )
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -59,6 +60,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         )
     }.combine(repository.observeWhatsappCallWindow()) { state, whatsappCallWindow ->
         state.copy(whatsappCallWindow = whatsappCallWindow)
+    }.combine(repository.observeWhatsappCallWindowConfigured()) { state, isConfigured ->
+        state.copy(isWhatsappCallWindowConfigured = isConfigured)
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),

@@ -74,7 +74,7 @@ If weekly screen time is empty, the most common causes are:
 ## Block device settings
 
 - There is no manual settings-guard toggle.
-- When both Accessibility and AppBlocker device admin are enabled, AppBlocker automatically blocks only settings pages that expose **uninstall** or **device-admin deactivation** for AppBlocker itself.
+- When both Accessibility and AppBlocker device admin are enabled, AppBlocker automatically blocks only settings pages that expose AppBlocker's **accessibility-service turn-off**, **uninstall**, or **device-admin deactivation** controls.
 - Other settings pages remain allowed.
 - In device-owner mode, the app also applies uninstall-blocking and clears broad app-control/config restrictions to avoid over-blocking normal settings usage.
 
@@ -147,10 +147,10 @@ it usually means Android Studio and the Android command-line SDK tools are from 
    - `java -version` should show JDK 17
    - if missing, install JDK 17 and set `JAVA_HOME` to that JDK path
 1. Build debug APK:
-   - `scripts/build-debug.ps1`
+   - scripts/build-debug.ps1
    - this uses Gradle `--no-daemon` to avoid false daemon-dispatch failures after a successful build
 2. Install on connected phone:
-   - `scripts/install.ps1`
+   - scripts/install.ps1
 3. Keep AppBlocker process logs open while testing:
    - `adb logcat | findstr /i "com.indrajeet.appblocker AndroidRuntime FATAL EXCEPTION"`
 4. Capture full logs to a file when needed:
@@ -170,8 +170,8 @@ You can also debug from Android Studio:
 ## Device-owner flow
 
 1. In PowerShell, set matching token values:
-   - `$env:APPBLOCKER_RELEASE_TOKEN = "AxrJEL8KwLu18w6QWtxHFjzCMKfu1NzsTkw1Vu2lBKI"`
-   - `$env:ORG_GRADLE_PROJECT_appblockerLaptopReleaseToken = $env:APPBLOCKER_RELEASE_TOKEN`
+   - $env:APPBLOCKER_RELEASE_TOKEN = "AxrJEL8KwLu18w6QWtxHFjzCMKfu1NzsTkw1Vu2lBKI"
+   - $env:ORG_GRADLE_PROJECT_appblockerLaptopReleaseToken = $env:APPBLOCKER_RELEASE_TOKEN
 2. Build the debug APK with `scripts/build-debug.ps1`.
 3. Factory reset the Android device if needed so it can accept device-owner provisioning.
 4. Make sure there is only one user profile on the device.

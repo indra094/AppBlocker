@@ -77,6 +77,10 @@ class BlockerRepository(
         return settingsGuardStore.observeWhatsappCallWindow()
     }
 
+    fun observeWhatsappCallWindowConfigured(): Flow<Boolean> {
+        return settingsGuardStore.observeWhatsappCallWindowConfigured()
+    }
+
     fun getWhatsappCallWindow(): WhatsappCallWindowConfig {
         return settingsGuardStore.getWhatsappCallWindow()
     }
