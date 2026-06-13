@@ -6,6 +6,7 @@ import android.content.ComponentName
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.os.PowerManager
 import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -33,13 +34,17 @@ class MainActivity : ComponentActivity() {
                         )
                     },
                     requestBatteryUnrestricted = {
-                        val requestIntent = Intent(
-                            Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
-                            Uri.parse("package:$packageName")
-                        )
+                        val appDetailsIntent = appDetailsSettingsIntent()
+                        val requestIntent = batteryOptimizationRequestIntent()
+                        val alreadyUnrestricted = isIgnoringBatteryOptimizations()
+
                         launchSettingsSafely(
-                            primary = requestIntent,
-                            fallback = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS),
+                            primary = if (alreadyUnrestricted) appDetailsIntent else requestIntent,
+                            fallback = if (alreadyUnrestricted) {
+                                Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
+                            } else {
+                                appDetailsIntent
+                            },
                             failureMessage = "Couldn't open battery optimization settings."
                         )
                     },
@@ -117,6 +122,27 @@ class MainActivity : ComponentActivity() {
             false
         } catch (_: IllegalStateException) {
             false
+        } catch (_: RuntimeException) {
+            false
         }
+    }
+
+    private fun batteryOptimizationRequestIntent(): Intent {
+        return Intent(
+            Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+            Uri.parse("package:$packageName")
+        )
+    }
+
+    private fun appDetailsSettingsIntent(): Intent {
+        return Intent(
+            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+            Uri.parse("package:$packageName")
+        )
+    }
+
+    private fun isIgnoringBatteryOptimizations(): Boolean {
+        val powerManager = getSystemService(PowerManager::class.java) ?: return false
+        return powerManager.isIgnoringBatteryOptimizations(packageName)
     }
 }

@@ -33,10 +33,10 @@ This only works on a device that is freshly reset or otherwise meets Android's d
 
 0. In the same PowerShell session, set a release token used by uninstall script + app build:
    - $env:APPBLOCKER_RELEASE_TOKEN = "AxrJEL8KwLu18w6QWtxHFjzCMKfu1NzsTkw1Vu2lBKI"
-   - $env:ORG_GRADLE_PROJECT_appblockerLaptopReleaseToken = $env:APPBLOCKER_RELEASE_TOKEN
+    $env:ORG_GRADLE_PROJECT_appblockerLaptopReleaseToken = $env:APPBLOCKER_RELEASE_TOKEN
 1. Build and install:
-   - `scripts/build-debug.ps1`
-   - `scripts/install.ps1`
+   scripts/build-debug.ps1
+   scripts/install.ps1
 2. Open AppBlocker and enable:
    - Accessibility service for AppBlocker
    - Battery mode as **Unrestricted**
