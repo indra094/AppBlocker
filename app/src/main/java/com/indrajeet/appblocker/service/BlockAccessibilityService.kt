@@ -2,8 +2,6 @@ package com.indrajeet.appblocker.service
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.AccessibilityServiceInfo
-import android.app.admin.DevicePolicyManager
-import android.content.ComponentName
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
@@ -14,7 +12,6 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import com.indrajeet.appblocker.AppBlockerApplication
 import com.indrajeet.appblocker.R
-import com.indrajeet.appblocker.admin.BlockDeviceAdminReceiver
 import com.indrajeet.appblocker.blocking.RuleEvaluator
 import com.indrajeet.appblocker.blocking.RuleSnapshot
 import com.indrajeet.appblocker.ui.BlockedActivity
@@ -299,11 +296,6 @@ class BlockAccessibilityService : AccessibilityService() {
     }
 
     private fun isManagementProtectionActive(): Boolean {
-        val manager = getSystemService(DevicePolicyManager::class.java) ?: return false
-        val admin = ComponentName(this, BlockDeviceAdminReceiver::class.java)
-        if (!manager.isAdminActive(admin) && !manager.isDeviceOwnerApp(packageName)) {
-            return false
-        }
         val enabledServices = Settings.Secure.getString(
             contentResolver,
             Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES

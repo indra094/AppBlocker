@@ -32,7 +32,7 @@ This only works on a device that is freshly reset or otherwise meets Android's d
 ## Important setup steps
 
 0. In the same PowerShell session, set a release token used by uninstall script + app build:
-   - $env:APPBLOCKER_RELEASE_TOKEN = "AxrJEL8KwLu18w6QWtxHFjzCMKfu1NzsTkw1Vu2lBKI"
+   $env:APPBLOCKER_RELEASE_TOKEN = "AxrJEL8KwLu18w6QWtxHFjzCMKfu1NzsTkw1Vu2lBKI"
     $env:ORG_GRADLE_PROJECT_appblockerLaptopReleaseToken = $env:APPBLOCKER_RELEASE_TOKEN
 1. Build and install:
    scripts/build-debug.ps1
@@ -187,7 +187,7 @@ To remove the app later, run one of these in a shell where `APPBLOCKER_RELEASE_T
 - Default (recommended): remove app **and** all blocked buckets/config:
   - `scripts/uninstall.ps1`
 - Optional: uninstall app but keep blocked buckets/config on device data partition:
-  - `scripts/uninstall.ps1 -KeepBuckets`
+  scripts/uninstall.ps1 -KeepBuckets
   - This mode uses Android package-manager uninstall with `-k` and may be user-0 scoped on modern Android builds.
 
 To delete only certain buckets from the laptop without uninstalling:

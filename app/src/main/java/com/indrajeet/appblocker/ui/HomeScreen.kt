@@ -43,6 +43,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -62,7 +63,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.indrajeet.appblocker.data.BlockBucketEntity
 import com.indrajeet.appblocker.data.BlockScheduleEntity
 import com.indrajeet.appblocker.data.BucketDetails
@@ -106,10 +110,25 @@ fun HomeScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
-    val accessibilityEnabled = context.isAccessibilityServiceEnabled()
-    val batteryUnrestricted = context.isBatteryUnrestricted()
-    val notificationAccessEnabled = context.isNotificationListenerEnabled()
-    val usageAccessEnabled = context.isUsageAccessEnabled()
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var permissionRefreshTick by remember { mutableIntStateOf(0) }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                permissionRefreshTick += 1
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
+    val accessibilityEnabled = remember(context, permissionRefreshTick) { context.isAccessibilityServiceEnabled() }
+    val batteryUnrestricted = remember(context, permissionRefreshTick) { context.isBatteryUnrestricted() }
+    val notificationAccessEnabled = remember(context, permissionRefreshTick) { context.isNotificationListenerEnabled() }
+    val usageAccessEnabled = remember(context, permissionRefreshTick) { context.isUsageAccessEnabled() }
 
     var showBucketDialog by rememberSaveable { mutableStateOf(false) }
     var showManagementDialog by rememberSaveable { mutableStateOf(false) }
@@ -121,7 +140,11 @@ fun HomeScreen(
     var scheduleBucket by remember { mutableStateOf<BlockBucketEntity?>(null) }
     var editingSchedule by remember { mutableStateOf<BlockScheduleEntity?>(null) }
 
-    val openAccessibilityForSetup: () -> Unit = openAccessibilitySettings
+    val openAccessibilityForSetup: () -> Unit = {
+        if (!accessibilityEnabled) {
+            openAccessibilitySettings()
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -280,6 +303,7 @@ fun HomeScreen(
 
     if (showManagementDialog) {
         ManagementSetupDialog(
+            accessibilityEnabled = accessibilityEnabled,
             isDeviceAdminActive = uiState.isDeviceAdminActive,
             isDeviceOwner = uiState.isDeviceOwner,
             onDismiss = { showManagementDialog = false },
@@ -368,15 +392,18 @@ private fun PermissionCard(
                     Text("Accessibility permission", fontWeight = FontWeight.Bold)
                     Text(
                         if (accessibilityEnabled) {
-                            "Enabled. App and website blocking can run."
+                            "Enabled. App and website blocking can run, and this settings page stays locked while the service is active."
                         } else {
                             "Required for enforcing blocks. Turn it on before expecting rules to work."
                         }
                     )
                 }
             }
-            OutlinedButton(onClick = openAccessibilitySettings) {
-                Text(if (accessibilityEnabled) "Open accessibility settings" else "Enable accessibility")
+            OutlinedButton(
+                onClick = openAccessibilitySettings,
+                enabled = !accessibilityEnabled
+            ) {
+                Text(if (accessibilityEnabled) "Accessibility enabled" else "Enable accessibility")
             }
             Row(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -486,10 +513,10 @@ private fun PermissionCard(
             }
             Text("Management protection", fontWeight = FontWeight.Bold)
             Text(
-                if (isDeviceAdminActive && accessibilityEnabled) {
+                if (accessibilityEnabled) {
                     "Active. AppBlocker automatically blocks settings screens that can turn off its accessibility service."
                 } else {
-                    "Pending. Enable both accessibility and device admin to activate automatic management protection."
+                    "Pending. Enable accessibility to activate automatic accessibility turn-off protection."
                 },
                 style = MaterialTheme.typography.bodySmall
             )
@@ -499,7 +526,7 @@ private fun PermissionCard(
                 }
             } else {
                 Text(
-                    "Device admin is enabled. Accessibility changes are blocked while protection is active.",
+                    "Device admin is enabled for supervised setup and removal control.",
                     style = MaterialTheme.typography.bodySmall
                 )
             }
@@ -913,6 +940,7 @@ private fun BucketSection(
 
 @Composable
 private fun ManagementSetupDialog(
+    accessibilityEnabled: Boolean,
     isDeviceAdminActive: Boolean,
     isDeviceOwner: Boolean,
     onDismiss: () -> Unit,
@@ -948,7 +976,7 @@ private fun ManagementSetupDialog(
                 }
                 if (isDeviceAdminActive) {
                     Text(
-                        "Accessibility turn-off screens are blocked while protection is active.",
+                        "Device admin is active for supervised setup and removal control.",
                         style = MaterialTheme.typography.bodySmall
                     )
                 } else {
@@ -959,11 +987,20 @@ private fun ManagementSetupDialog(
                         Text("Open security settings")
                     }
                 }
+                Text(
+                    if (accessibilityEnabled) {
+                        "Accessibility turn-off screens are blocked while the service is active."
+                    } else {
+                        "Enable accessibility once; after that, AppBlocker will stop opening its Accessibility settings page."
+                    },
+                    style = MaterialTheme.typography.bodySmall
+                )
                 OutlinedButton(
                     onClick = openAccessibilitySettings,
+                    enabled = !accessibilityEnabled,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Open accessibility settings")
+                    Text(if (accessibilityEnabled) "Accessibility enabled" else "Open accessibility settings")
                 }
                 Text(
                     "For dedicated supervised devices, finish setup from the laptop with scripts\\provision-device-owner.ps1. That path depends on Android's device-owner rules, which usually require a freshly reset device.",
