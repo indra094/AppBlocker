@@ -28,6 +28,17 @@ class WhatsappCallNotificationHeuristicsTest {
     }
 
     @Test
+    fun `minimized ongoing video call notification is treated as a whatsapp call notification`() {
+        assertTrue(
+            WhatsappCallNotificationHeuristics.looksLikeCallNotification(
+                category = null,
+                isOngoing = true,
+                fields = listOf("WhatsApp", "Ongoing video call", "Hang up", "Return to call")
+            )
+        )
+    }
+
+    @Test
     fun `missed call notification is ignored`() {
         assertFalse(
             WhatsappCallNotificationHeuristics.looksLikeCallNotification(

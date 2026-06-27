@@ -441,9 +441,9 @@ private fun PermissionCard(
                     Text("Notification access (WhatsApp silence)", fontWeight = FontWeight.Bold)
                     Text(
                         if (notificationAccessEnabled) {
-                            "Enabled. WhatsApp notifications can be silenced during active WhatsApp block windows, and AppBlocker can surface ongoing background WhatsApp calls so Accessibility can end them outside the allowed ${WhatsappCallWindow.description(whatsappCallWindow)} window."
+                            "Enabled. WhatsApp notifications can be silenced during active WhatsApp block windows, and AppBlocker can end or surface ongoing minimized WhatsApp calls outside the allowed ${WhatsappCallWindow.description(whatsappCallWindow)} window."
                         } else {
-                            "Enable notification access so AppBlocker can cancel WhatsApp notifications during active WhatsApp block windows and surface ongoing background WhatsApp calls when the blocked period starts. WhatsApp call ending outside the allowed ${WhatsappCallWindow.description(whatsappCallWindow)} window still depends on Accessibility."
+                            "Enable notification access so AppBlocker can cancel WhatsApp notifications during active WhatsApp block windows and end or surface ongoing minimized WhatsApp calls when the blocked period starts. WhatsApp call ending outside the allowed ${WhatsappCallWindow.description(whatsappCallWindow)} window still depends on Accessibility."
                         }
                     )
                 }
@@ -464,9 +464,9 @@ private fun PermissionCard(
                     Text("WhatsApp call allowed window", fontWeight = FontWeight.Bold)
                     Text(
                         if (isWhatsappCallWindowConfigured) {
-                            "Foreground WhatsApp calls are allowed during ${WhatsappCallWindow.description(whatsappCallWindow)}. This window is locked."
+                            "WhatsApp calls are allowed during ${WhatsappCallWindow.description(whatsappCallWindow)}. This window is locked."
                         } else {
-                            "Foreground WhatsApp calls are allowed during ${WhatsappCallWindow.description(whatsappCallWindow)}. This can only be configured once."
+                            "WhatsApp calls are allowed during ${WhatsappCallWindow.description(whatsappCallWindow)}. This can only be configured once."
                         }
                     )
                 }
@@ -588,7 +588,7 @@ private fun WhatsappCallWindowDialog(
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 SnackbarHost(dialogSnackbarHostState)
                 Text(
-                    "Set the Pacific Time window when WhatsApp calls are allowed. Outside this window, AppBlocker ends foreground WhatsApp calls. Example: 08:00 to 04:00 means calls are cut from 4:00 AM until 8:00 AM Pacific."
+                    "Set the Pacific Time window when WhatsApp calls are allowed. Outside this window, AppBlocker ends visible or minimized WhatsApp calls when Android exposes the call controls or notification action. Example: 08:00 to 04:00 means calls are cut from 4:00 AM until 8:00 AM Pacific."
                 )
                 OutlinedTextField(
                     value = startText,

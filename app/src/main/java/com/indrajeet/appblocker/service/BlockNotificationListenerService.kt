@@ -13,6 +13,7 @@ import com.indrajeet.appblocker.util.WhatsappCallNotificationHeuristics
 import com.indrajeet.appblocker.util.WhatsappCallWindow
 import com.indrajeet.appblocker.util.WhatsappCallWindowConfig
 import java.time.ZonedDateTime
+import java.util.Locale
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -123,12 +124,18 @@ class BlockNotificationListenerService : NotificationListenerService() {
         if (!shouldPromoteWhatsappCallNotification(notification.key)) {
             return
         }
+        if (sendCallEndAction(notification.notification)) {
+            return
+        }
         sendCallSurfaceIntent(notification.notification)
     }
 
     private fun looksLikeWhatsappCallNotification(notification: StatusBarNotification): Boolean {
         val payload = notification.notification
         val extras = payload.extras
+        val actionTitles = payload.actions
+            ?.map { action -> action.title?.toString() }
+            .orEmpty()
         return WhatsappCallNotificationHeuristics.looksLikeCallNotification(
             category = payload.category,
             isOngoing = payload.flags and Notification.FLAG_ONGOING_EVENT != 0,
@@ -137,8 +144,10 @@ class BlockNotificationListenerService : NotificationListenerService() {
                 extras?.getCharSequence(Notification.EXTRA_TITLE)?.toString(),
                 extras?.getCharSequence(Notification.EXTRA_TEXT)?.toString(),
                 extras?.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString(),
-                extras?.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString()
-            )
+                extras?.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString(),
+                extras?.getCharSequence(Notification.EXTRA_INFO_TEXT)?.toString(),
+                extras?.getCharSequence(Notification.EXTRA_SUMMARY_TEXT)?.toString()
+            ) + actionTitles
         )
     }
 
@@ -153,6 +162,24 @@ class BlockNotificationListenerService : NotificationListenerService() {
         lastPromotedWhatsappCallKey = notificationKey
         lastPromotedWhatsappCallAt = now
         return true
+    }
+
+    private fun sendCallEndAction(notification: Notification): Boolean {
+        return notification.actions
+            ?.asSequence()
+            .orEmpty()
+            .filter { action ->
+                action.title
+                    ?.toString()
+                    ?.lowercase(Locale.US)
+                    ?.let { title ->
+                        WHATSAPP_CALL_END_ACTION_MARKERS.any(title::contains)
+                    } == true
+            }
+            .any { action ->
+                val pendingIntent = action.actionIntent ?: return@any false
+                runCatching { pendingIntent.send() }.isSuccess
+            }
     }
 
     private fun sendCallSurfaceIntent(notification: Notification) {
@@ -179,6 +206,13 @@ class BlockNotificationListenerService : NotificationListenerService() {
         private val WHATSAPP_PACKAGES = setOf(
             "com.whatsapp",
             "com.whatsapp.w4b"
+        )
+        private val WHATSAPP_CALL_END_ACTION_MARKERS = listOf(
+            "end call",
+            "hang up",
+            "hangup",
+            "decline",
+            "leave call"
         )
     }
 }

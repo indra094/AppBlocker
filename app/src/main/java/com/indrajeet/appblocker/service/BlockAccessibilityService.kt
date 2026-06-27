@@ -166,12 +166,20 @@ class BlockAccessibilityService : AccessibilityService() {
     }
 
     private fun evaluateCurrentContext() {
-        val activePackage = activeWindowPackageName() ?: currentPackage ?: return
-        currentPackage = activePackage
-        if (activePackage in settingsPackages && isProtectedAccessibilityManagementScreen()) {
+        val activePackage = activeWindowPackageName() ?: currentPackage
+        if (activePackage != null) {
+            currentPackage = activePackage
+        }
+        val now = ZonedDateTime.now()
+        if (disconnectWhatsappCallOutsideAllowedWindow(activePackage, now)) {
+            return
+        }
+
+        val foregroundPackage = activePackage ?: return
+        if (foregroundPackage in settingsPackages && isProtectedAccessibilityManagementScreen()) {
             triggerBlock(
                 reason = "Protected accessibility setting blocked",
-                target = activePackage,
+                target = foregroundPackage,
                 forceHome = true,
                 minIntervalMs = 0,
                 showBlockedScreen = false
@@ -179,19 +187,15 @@ class BlockAccessibilityService : AccessibilityService() {
             return
         }
         val snapshot = ruleSnapshot
-        val now = ZonedDateTime.now()
-        if (disconnectWhatsappCallOutsideAllowedWindow(activePackage, now)) {
-            return
-        }
         if (snapshot.buckets.isEmpty()) {
             return
         }
 
-        val appBucket = RuleEvaluator.activeBucketForPackage(snapshot, activePackage, now)
+        val appBucket = RuleEvaluator.activeBucketForPackage(snapshot, foregroundPackage, now)
         if (appBucket != null) {
             triggerBlock(
                 reason = "Blocked by ${appBucket.bucketName}",
-                target = activePackage,
+                target = foregroundPackage,
                 forceHome = true,
                 minIntervalMs = 0,
                 showBlockedScreen = false
@@ -199,8 +203,8 @@ class BlockAccessibilityService : AccessibilityService() {
             return
         }
 
-        if (activePackage in BrowserSupport.browserAddressBars.keys) {
-            val host = readCurrentHost(activePackage) ?: return
+        if (foregroundPackage in BrowserSupport.browserAddressBars.keys) {
+            val host = readCurrentHost(foregroundPackage) ?: return
             val hostMatch = RuleEvaluator.activeBucketForHost(snapshot, host, now) ?: return
             if (hostMatch.second == SAFE_REDIRECT_HOST) {
                 // Avoid redirect loops if safe URL itself is blocked.
@@ -213,7 +217,7 @@ class BlockAccessibilityService : AccessibilityService() {
                 return
             }
             redirectBlockedWebsite(
-                browserPackage = activePackage,
+                browserPackage = foregroundPackage,
                 blockedHost = hostMatch.second,
                 bucketName = hostMatch.first.bucketName
             )
@@ -221,17 +225,17 @@ class BlockAccessibilityService : AccessibilityService() {
     }
 
     private fun disconnectWhatsappCallOutsideAllowedWindow(
-        activePackage: String,
+        activePackage: String?,
         now: ZonedDateTime
     ): Boolean {
         val currentWindow = whatsappCallWindow
-        if (activePackage !in WHATSAPP_PACKAGES || !WhatsappCallWindow.shouldDisconnect(now, currentWindow)) {
+        if (!WhatsappCallWindow.shouldDisconnect(now, currentWindow)) {
             return false
         }
-        val root = rootInActiveWindow ?: return false
-        if (!looksLikeWhatsappCall(root)) {
-            return false
-        }
+        val root = findVisibleWhatsappCallRoot(activePackage) ?: return false
+        val targetPackage = root.packageName?.toString()?.takeIf { it in WHATSAPP_PACKAGES }
+            ?: activePackage?.takeIf { it in WHATSAPP_PACKAGES }
+            ?: WHATSAPP_PACKAGES.first()
 
         val disconnected = tapWhatsappEndCall(root)
         triggerBlock(
@@ -240,7 +244,7 @@ class BlockAccessibilityService : AccessibilityService() {
             } else {
                 "WhatsApp call detected outside the allowed ${WhatsappCallWindow.description(currentWindow)} window"
             },
-            target = activePackage,
+            target = targetPackage,
             forceHome = false,
             minIntervalMs = 5_000,
             showBlockedScreen = false
@@ -256,14 +260,7 @@ class BlockAccessibilityService : AccessibilityService() {
         if (packageName !in WHATSAPP_PACKAGES) {
             return
         }
-        val root = rootInActiveWindow ?: return
-        val activePackage = root.packageName?.toString() ?: return
-        if (activePackage !in WHATSAPP_PACKAGES) {
-            return
-        }
-        if (looksLikeWhatsappCall(root)) {
-            disconnectWhatsappCallOutsideAllowedWindow(activePackage, ZonedDateTime.now())
-        }
+        disconnectWhatsappCallOutsideAllowedWindow(packageName, ZonedDateTime.now())
     }
 
     private fun isOutsideWhatsappCallWindow(): Boolean {
@@ -397,6 +394,25 @@ class BlockAccessibilityService : AccessibilityService() {
             }
         }
         return foundEndControl || callSignals >= 2
+    }
+
+    private fun findVisibleWhatsappCallRoot(activePackage: String?): AccessibilityNodeInfo? {
+        val activeRoot = rootInActiveWindow
+        if (
+            activeRoot != null &&
+            (activeRoot.packageName?.toString() in WHATSAPP_PACKAGES || activePackage in WHATSAPP_PACKAGES) &&
+            looksLikeWhatsappCall(activeRoot)
+        ) {
+            return activeRoot
+        }
+
+        return runCatching { windows }
+            .getOrNull()
+            .orEmpty()
+            .asSequence()
+            .mapNotNull { window -> runCatching { window.root }.getOrNull() }
+            .filter { root -> root.packageName?.toString() in WHATSAPP_PACKAGES }
+            .firstOrNull(::looksLikeWhatsappCall)
     }
 
     private fun tapWhatsappEndCall(root: AccessibilityNodeInfo): Boolean {

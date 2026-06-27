@@ -9,7 +9,11 @@ object WhatsappCallNotificationHeuristics {
         "voice call",
         "video call",
         "ongoing call",
+        "ongoing video call",
+        "ongoing voice call",
         "return to call",
+        "return to video call",
+        "return to voice call",
         "ringing",
         "calling",
         "reconnecting"

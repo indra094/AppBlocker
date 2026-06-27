@@ -13,7 +13,7 @@
 - Blocks selected websites in supported browsers by reading the visible address bar through the same accessibility service.
 - Redirects blocked website hits to `https://github.com` instead of force-closing the browser.
 - Silences WhatsApp / WhatsApp Business notifications during active WhatsApp app-block windows when Notification Access is enabled.
-- Best-effort watches WhatsApp / WhatsApp Business activity and allows calls only during a configurable Pacific Time window (default `8:00 AM` to `6:30 AM` the next day). Outside that window, it ends foreground calls and can surface an ongoing background call from the WhatsApp notification so the accessibility service can press the in-call end button without bouncing other apps to Home.
+- Best-effort watches WhatsApp / WhatsApp Business activity and allows calls only during a configurable Pacific Time window (default `8:00 AM` to `6:30 AM` the next day). Outside that window, it ends visible foreground or minimized call surfaces when Android exposes the in-call controls, and it can use an ongoing WhatsApp call notification's hang-up action before surfacing the full call UI.
 - Shows a weekly screen-time tracker when Usage Access is enabled.
 - Stores rules locally with Room.
 - Treats targets as append-only.
@@ -62,9 +62,9 @@ If WhatsApp notifications are not silenced during block windows, the most common
 If WhatsApp calls are not ended outside the configured Pacific Time window, the most common causes are:
 
 - accessibility is off
-- notification access is off, so an ongoing background call could not be surfaced when the blocked period started
+- notification access is off, so an ongoing minimized/background call could not be ended from its notification or surfaced when the blocked period started
 - the in-call WhatsApp UI did not expose an accessible end-call control on that device/build
-- the call was not in the foreground when the check ran
+- Android did not expose the minimized call surface or a notification hang-up action on that device/build
 
 If weekly screen time is empty, the most common causes are:
 
