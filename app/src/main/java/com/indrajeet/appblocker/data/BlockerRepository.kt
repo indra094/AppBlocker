@@ -65,6 +65,10 @@ class BlockerRepository(
         }
     }
 
+    fun clearWhatsappCallWindow() {
+        settingsGuardStore.clearWhatsappCallWindow()
+    }
+
     fun observeSettingsGuardEnabled(): Flow<Boolean> = settingsGuardStore.observeSettingsBlocked()
 
     fun isSettingsGuardEnabled(): Boolean = settingsGuardStore.isSettingsBlocked()

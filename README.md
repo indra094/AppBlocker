@@ -106,6 +106,7 @@ Website blocking is best-effort because Android does not expose a universal brow
 - `scripts/install.ps1` install helper
 - `scripts/provision-device-owner.ps1` device-owner helper
 - `scripts/reset-bucket-schedules.ps1` remove time windows from selected buckets on the laptop
+scripts/clear-whatsapp-call-window.ps1 will clear whatsapp call window
 - `scripts/uninstall.ps1` admin removal + uninstall helper (supports optional `-KeepBuckets`)
 
 For iPhone install steps, see `ios/README.md`.
@@ -170,8 +171,8 @@ You can also debug from Android Studio:
 ## Device-owner flow
 
 1. In PowerShell, set matching token values:
-   - $env:APPBLOCKER_RELEASE_TOKEN = "AxrJEL8KwLu18w6QWtxHFjzCMKfu1NzsTkw1Vu2lBKI"
-   - $env:ORG_GRADLE_PROJECT_appblockerLaptopReleaseToken = $env:APPBLOCKER_RELEASE_TOKEN
+   $env:APPBLOCKER_RELEASE_TOKEN = "AxrJEL8KwLu18w6QWtxHFjzCMKfu1NzsTkw1Vu2lBKI"
+   $env:ORG_GRADLE_PROJECT_appblockerLaptopReleaseToken = $env:APPBLOCKER_RELEASE_TOKEN
 2. Build the debug APK with `scripts/build-debug.ps1`.
 3. Factory reset the Android device if needed so it can accept device-owner provisioning.
 4. Make sure there is only one user profile on the device.
@@ -195,7 +196,7 @@ To delete only certain buckets from the laptop without uninstalling:
 - By bucket id:
   - `scripts/delete-buckets.ps1 -BucketId 3,5`
 - By exact bucket name:
-  - `scripts/delete-buckets.ps1 -BucketName Social,Games`
+  scripts/delete-buckets.ps1 -BucketName Social,Games
 
 To keep a bucket but reset its timings from the laptop:
 

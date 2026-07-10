@@ -17,7 +17,8 @@ class LaptopReleaseReceiver : BroadcastReceiver() {
         if (
             action != ACTION_RELEASE_FOR_UNINSTALL &&
             action != ACTION_DELETE_BUCKETS &&
-            action != ACTION_RESET_BUCKET_SCHEDULES
+            action != ACTION_RESET_BUCKET_SCHEDULES &&
+            action != ACTION_CLEAR_WHATSAPP_CALL_WINDOW
         ) {
             return
         }
@@ -34,6 +35,7 @@ class LaptopReleaseReceiver : BroadcastReceiver() {
             ACTION_RELEASE_FOR_UNINSTALL -> releaseForUninstall(context)
             ACTION_DELETE_BUCKETS -> deleteBuckets(context, intent)
             ACTION_RESET_BUCKET_SCHEDULES -> resetBucketSchedules(context, intent)
+            ACTION_CLEAR_WHATSAPP_CALL_WINDOW -> clearWhatsappCallWindow(context)
         }
     }
 
@@ -146,6 +148,22 @@ class LaptopReleaseReceiver : BroadcastReceiver() {
         }
     }
 
+    private fun clearWhatsappCallWindow(context: Context) {
+        runCatching {
+            val settingsGuardStore =
+                (context.applicationContext as AppBlockerApplication).settingsGuardStore
+
+            settingsGuardStore.clearWhatsappCallWindow()
+
+            resultCode = RESULT_OK
+            resultData = "WhatsApp call window configuration cleared."
+        }.onFailure {
+            Log.e(TAG, "Failed to clear WhatsApp call window.", it)
+            resultCode = RESULT_FAILURE
+            resultData = it.message ?: "Failed to clear WhatsApp call window."
+        }
+    }
+
     private fun parseIds(value: String?): List<Long> {
         return parseDelimited(value)
             .mapNotNull { it.toLongOrNull() }
@@ -169,6 +187,8 @@ class LaptopReleaseReceiver : BroadcastReceiver() {
             "com.indrajeet.appblocker.action.DELETE_BUCKETS"
         const val ACTION_RESET_BUCKET_SCHEDULES =
             "com.indrajeet.appblocker.action.RESET_BUCKET_SCHEDULES"
+        const val ACTION_CLEAR_WHATSAPP_CALL_WINDOW =
+            "com.indrajeet.appblocker.action.CLEAR_WHATSAPP_CALL_WINDOW"
         const val EXTRA_TOKEN = "token"
         const val EXTRA_BUCKET_IDS = "bucket_ids"
         const val EXTRA_BUCKET_NAMES = "bucket_names"

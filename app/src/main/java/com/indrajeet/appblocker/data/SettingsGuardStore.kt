@@ -35,6 +35,20 @@ class SettingsGuardStore(context: Context) {
             prefs.contains(KEY_WHATSAPP_CALL_WINDOW_END_MINUTE)
     }
 
+    fun clearWhatsappCallWindow() {
+        prefs.edit()
+            .remove(KEY_WHATSAPP_CALL_WINDOW_START_MINUTE)
+            .remove(KEY_WHATSAPP_CALL_WINDOW_END_MINUTE)
+            .remove(KEY_WHATSAPP_CALL_WINDOW_CONFIGURED)
+            .apply()
+
+        whatsappCallWindowState.value = WhatsappCallWindow.sanitize(
+            WhatsappCallWindow.DEFAULT_START_MINUTE,
+            WhatsappCallWindow.DEFAULT_END_MINUTE
+        )
+        whatsappCallWindowConfiguredState.value = false
+    }
+
     fun setWhatsappCallWindow(
         startMinute: Int,
         endMinute: Int
