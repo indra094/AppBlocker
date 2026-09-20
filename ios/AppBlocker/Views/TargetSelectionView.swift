@@ -19,7 +19,9 @@ struct TargetSelectionView: View {
                 Section(bucket.name) {
                     SelectionSummaryLine(selection: selection)
                     Button("Open Apple picker") {
-                        pickerPresented = true
+                        Task {
+                            await presentPicker()
+                        }
                     }
                 }
             }
@@ -44,5 +46,17 @@ struct TargetSelectionView: View {
                 selection: $selection
             )
         }
+    }
+
+    private func presentPicker() async {
+        if model.authorizationStatus != .approved {
+            await model.requestAuthorization()
+        }
+
+        guard model.authorizationStatus == .approved else {
+            return
+        }
+
+        pickerPresented = true
     }
 }

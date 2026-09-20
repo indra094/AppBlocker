@@ -18,7 +18,9 @@ struct AddBucketView: View {
                 Section("Targets") {
                     SelectionSummaryLine(selection: selection)
                     Button("Choose apps, categories, and websites") {
-                        pickerPresented = true
+                        Task {
+                            await presentPicker()
+                        }
                     }
                 }
             }
@@ -44,6 +46,18 @@ struct AddBucketView: View {
                 selection: $selection
             )
         }
+    }
+
+    private func presentPicker() async {
+        if model.authorizationStatus != .approved {
+            await model.requestAuthorization()
+        }
+
+        guard model.authorizationStatus == .approved else {
+            return
+        }
+
+        pickerPresented = true
     }
 }
 

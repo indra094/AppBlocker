@@ -32,8 +32,8 @@ This only works on a device that is freshly reset or otherwise meets Android's d
 ## Important setup steps
 
 0. In the same PowerShell session, set a release token used by uninstall script + app build:
-   $env:APPBLOCKER_RELEASE_TOKEN = "AxrJEL8KwLu18w6QWtxHFjzCMKfu1NzsTkw1Vu2lBKI"
-    $env:ORG_GRADLE_PROJECT_appblockerLaptopReleaseToken = $env:APPBLOCKER_RELEASE_TOKEN
+$env:APPBLOCKER_RELEASE_TOKEN = "AxrJEL8KwLu18w6QWtxHFjzCMKfu1NzsTkw1Vu2lBKI"
+$env:ORG_GRADLE_PROJECT_appblockerLaptopReleaseToken = $env:APPBLOCKER_RELEASE_TOKEN
 1. Build and install:
    scripts/build-debug.ps1
    scripts/install.ps1
@@ -151,7 +151,7 @@ it usually means Android Studio and the Android command-line SDK tools are from 
    - scripts/build-debug.ps1
    - this uses Gradle `--no-daemon` to avoid false daemon-dispatch failures after a successful build
 2. Install on connected phone:
-   - scripts/install.ps1
+   scripts/install.ps1
 3. Keep AppBlocker process logs open while testing:
    - `adb logcat | findstr /i "com.indrajeet.appblocker AndroidRuntime FATAL EXCEPTION"`
 4. Capture full logs to a file when needed:
@@ -186,7 +186,7 @@ You can also debug from Android Studio:
 To remove the app later, run one of these in a shell where `APPBLOCKER_RELEASE_TOKEN` matches the value used at build time:
 
 - Default (recommended): remove app **and** all blocked buckets/config:
-  - `scripts/uninstall.ps1`
+  scripts/uninstall.ps1
 - Optional: uninstall app but keep blocked buckets/config on device data partition:
   scripts/uninstall.ps1 -KeepBuckets
   - This mode uses Android package-manager uninstall with `-k` and may be user-0 scoped on modern Android builds.
@@ -197,13 +197,24 @@ To delete only certain buckets from the laptop without uninstalling:
   - `scripts/delete-buckets.ps1 -BucketId 3,5`
 - By exact bucket name:
   scripts/delete-buckets.ps1 -BucketName Social,Games
+scripts/delete-buckets.ps1 -BucketName "no\ chess\ just\ studies"
 
+$env:APPBLOCKER_RELEASE_TOKEN = "AxrJEL8KwLu18w6QWtxHFjzCMKfu1NzsTkw1Vu2lBKI"
+$env:ORG_GRADLE_PROJECT_appblockerLaptopReleaseToken = $env:APPBLOCKER_RELEASE_TOKEN
+scripts/uninstall.ps1 -KeepBuckets
+scripts/install.ps1
 To keep a bucket but reset its timings from the laptop:
 
 - By bucket id:
   - `scripts/reset-bucket-schedules.ps1 -BucketId 3,5`
 - By exact bucket name:
-  scripts/reset-bucket-schedules.ps1 -BucketName Social,Games
+  scripts/reset-bucket-schedules.ps1 -BucketName "blockoutsidewhatsapphours"
+  scripts/reset-bucket-schedules.ps1 -BucketName "Pokemon\ unite"
+  scripts/reset-bucket-schedules.ps1 -BucketName "chrome"
+  scripts/reset-bucket-schedules.ps1 -BucketName "whatsapp"
+  scripts/reset-bucket-schedules.ps1 -BucketName "no\ chess\ just\ studies"
+  scripts/reset-bucket-schedules.ps1 -BucketName "google"
+
 
 Notes:
 
