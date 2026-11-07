@@ -76,7 +76,7 @@ class BlockNotificationListenerService : NotificationListenerService() {
         super.onDestroy()
     }
 
-    private fun cancelActiveBlockedWhatsappNotifications() {
+    private fun cancelActiveBlockedCallNotifications() {
         val snapshot = ruleSnapshot
         if (snapshot.buckets.isEmpty()) {
             return
@@ -120,7 +120,7 @@ class BlockNotificationListenerService : NotificationListenerService() {
         sendCallSurfaceIntent(notification.notification)
     }
 
-    private fun looksLikeWhatsappCallNotification(notification: StatusBarNotification): Boolean {
+    private fun looksLikeCallNotification(notification: StatusBarNotification): Boolean {
         val payload = notification.notification
         val extras = payload.extras
         val actionTitles = payload.actions
@@ -141,11 +141,11 @@ class BlockNotificationListenerService : NotificationListenerService() {
         )
     }
 
-    private fun shouldPromoteWhatsappCallNotification(notificationKey: String): Boolean {
+    private fun shouldPromoteCallNotification(notificationKey: String): Boolean {
         val now = System.currentTimeMillis()
         if (
-            notificationKey == lastPromotedWhatsappCallKey &&
-            now - lastPromotedWhatsappCallAt < CALL_PROMOTION_COOLDOWN_MS
+            notificationKey == lastPromotedCallKey &&
+            now - lastPromotedCallAt < CALL_PROMOTION_COOLDOWN_MS
         ) {
             return false
         }
@@ -191,8 +191,8 @@ class BlockNotificationListenerService : NotificationListenerService() {
     }
 
     companion object {
-        private const val WHATSAPP_CALL_TICK_MS = 5_000L
-        private const val WHATSAPP_CALL_PROMOTION_COOLDOWN_MS = 10_000L
+        private const val CALL_TICK_MS = 5_000L
+        private const val CALL_PROMOTION_COOLDOWN_MS = 10_000L
         private val WHATSAPP_PACKAGES = setOf("com.whatsapp", "com.whatsapp.w4b")
         private val MEET_PACKAGES = setOf("com.google.android.apps.meetings", "com.google.android.apps.tachyon")
         private val CALL_APP_PACKAGES = WHATSAPP_PACKAGES + MEET_PACKAGES
