@@ -290,11 +290,7 @@ class BlockAccessibilityService : AccessibilityService() {
         disconnectWhatsappCallWhenBlocked(packageName, ZonedDateTime.now())
     }
 
-    private fun isPackageBlocked(packageName, ZonedDateTime.now()): Boolean {
-        return WhatsappCallWindow.shouldDisconnect(ZonedDateTime.now(), whatsappCallWindow)
-    }
-
-    private fun isPackageBlocked(packageName: String, now: ZonedDateTime): Boolean =
+private fun isPackageBlocked(packageName: String, now: ZonedDateTime): Boolean =
         RuleEvaluator.activeBucketForPackage(ruleSnapshot, packageName, now) != null
 
     private fun isProtectedAccessibilityManagementScreen(): Boolean {
