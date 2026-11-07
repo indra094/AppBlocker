@@ -98,7 +98,7 @@ class BlockNotificationListenerService : NotificationListenerService() {
             .orEmpty()
             .asSequence()
             .filter { it.packageName in CALL_APP_PACKAGES }
-            .forEach(::maybePromoteBlockedWhatsappCall)
+            .forEach(::maybePromoteBlockedCall)
     }
 
     private fun maybePromoteBlockedCall(notification: StatusBarNotification) {
