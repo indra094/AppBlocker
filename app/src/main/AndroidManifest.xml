@@ -83,7 +83,6 @@
             android:name=".admin.LaptopReleaseReceiver"
             android:exported="true">
             <intent-filter>
-                <action android:name="com.indrajeet.appblocker.action.CLEAR_WHATSAPP_CALL_WINDOW" />
                 <action android:name="com.indrajeet.appblocker.action.RELEASE_FOR_UNINSTALL" />
                 <action android:name="com.indrajeet.appblocker.action.DELETE_BUCKETS" />
                 <action android:name="com.indrajeet.appblocker.action.RESET_BUCKET_SCHEDULES" />
