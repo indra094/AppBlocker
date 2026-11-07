@@ -207,7 +207,7 @@ To keep a bucket but reset its timings from the laptop:
 - By bucket id:
   - `scripts/reset-bucket-schedules.ps1 -BucketId 3,5`
 - By exact bucket name:
-  scripts/reset-bucket-schedules.ps1 -BucketName "blockoutsidewhatsapphours"
+  scripts/reset-bucket-schedules.ps1 -BucketName "social-media"
   scripts/reset-bucket-schedules.ps1 -BucketName "Pokemon\ unite"
   scripts/reset-bucket-schedules.ps1 -BucketName "chrome"
   scripts/reset-bucket-schedules.ps1 -BucketName "whatsapp"
