@@ -67,7 +67,7 @@ class BlockNotificationListenerService : NotificationListenerService() {
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
         val notification = sbn ?: return
         val packageName = notification.packageName
-        if (packageName !in WHATSAPP_PACKAGES) {
+        if (packageName !in CALL_APP_PACKAGES) {
             return
         }
         val snapshot = ruleSnapshot
@@ -95,7 +95,7 @@ class BlockNotificationListenerService : NotificationListenerService() {
         activeNotifications
             .orEmpty()
             .asSequence()
-            .filter { it.packageName in WHATSAPP_PACKAGES }
+            .filter { it.packageName in CALL_APP_PACKAGES }
             .filter { RuleEvaluator.activeBucketForPackage(snapshot, it.packageName, now) != null }
             .forEach { sbn ->
                 runCatching { cancelNotification(sbn.key) }
@@ -107,7 +107,7 @@ class BlockNotificationListenerService : NotificationListenerService() {
         activeNotifications
             .orEmpty()
             .asSequence()
-            .filter { it.packageName in WHATSAPP_PACKAGES }
+            .filter { it.packageName in CALL_APP_PACKAGES }
             .forEach(::maybePromoteBlockedWhatsappCall)
     }
 
@@ -173,7 +173,7 @@ class BlockNotificationListenerService : NotificationListenerService() {
                     ?.toString()
                     ?.lowercase(Locale.US)
                     ?.let { title ->
-                        WHATSAPP_CALL_END_ACTION_MARKERS.any(title::contains)
+                        (WHATSAPP_CALL_END_ACTION_MARKERS + MEET_CALL_END_ACTION_MARKERS).any(title::contains)
                     } == true
             }
             .any { action ->
@@ -203,16 +203,10 @@ class BlockNotificationListenerService : NotificationListenerService() {
     companion object {
         private const val WHATSAPP_CALL_TICK_MS = 5_000L
         private const val WHATSAPP_CALL_PROMOTION_COOLDOWN_MS = 10_000L
-        private val WHATSAPP_PACKAGES = setOf(
-            "com.whatsapp",
-            "com.whatsapp.w4b"
-        )
-        private val WHATSAPP_CALL_END_ACTION_MARKERS = listOf(
-            "end call",
-            "hang up",
-            "hangup",
-            "decline",
-            "leave call"
-        )
+        private val WHATSAPP_PACKAGES = setOf("com.whatsapp", "com.whatsapp.w4b")
+        private val MEET_PACKAGES = setOf("com.google.android.apps.meetings", "com.google.android.apps.tachyon")
+        private val CALL_APP_PACKAGES = WHATSAPP_PACKAGES + MEET_PACKAGES
+        private val WHATSAPP_CALL_END_ACTION_MARKERS = listOf("end call", "hang up", "hangup", "decline", "leave call")
+        private val MEET_CALL_END_ACTION_MARKERS = listOf("leave", "end call", "hang up", "disconnect")
     }
 }
