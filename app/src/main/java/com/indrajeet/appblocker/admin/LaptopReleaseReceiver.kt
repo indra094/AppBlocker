@@ -17,7 +17,7 @@ class LaptopReleaseReceiver : BroadcastReceiver() {
         if (
             action != ACTION_RELEASE_FOR_UNINSTALL &&
             action != ACTION_DELETE_BUCKETS &&
-            action != ACTION_RESET_BUCKET_SCHEDULES &&
+            action != ACTION_RESET_BUCKET_SCHEDULES
         ) {
             return
         }
