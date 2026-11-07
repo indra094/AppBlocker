@@ -4,11 +4,11 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-class WhatsappCallNotificationHeuristicsTest {
+class CallNotificationHeuristicsTest {
     @Test
-    fun `call category is treated as a whatsapp call notification`() {
+    fun `call category is treated as a call notification`() {
         assertTrue(
-            WhatsappCallNotificationHeuristics.looksLikeCallNotification(
+            CallNotificationHeuristics.looksLikeCallNotification(
                 category = "call",
                 isOngoing = false,
                 fields = listOf("WhatsApp", "John Doe")
@@ -17,9 +17,9 @@ class WhatsappCallNotificationHeuristicsTest {
     }
 
     @Test
-    fun `ongoing calling notification is treated as a whatsapp call notification`() {
+    fun `ongoing calling notification is treated as a call notification`() {
         assertTrue(
-            WhatsappCallNotificationHeuristics.looksLikeCallNotification(
+            CallNotificationHeuristics.looksLikeCallNotification(
                 category = null,
                 isOngoing = true,
                 fields = listOf("WhatsApp", "Calling...", "Return to call")
@@ -28,9 +28,9 @@ class WhatsappCallNotificationHeuristicsTest {
     }
 
     @Test
-    fun `minimized ongoing video call notification is treated as a whatsapp call notification`() {
+    fun `minimized ongoing video call notification is treated as a call notification`() {
         assertTrue(
-            WhatsappCallNotificationHeuristics.looksLikeCallNotification(
+            CallNotificationHeuristics.looksLikeCallNotification(
                 category = null,
                 isOngoing = true,
                 fields = listOf("WhatsApp", "Ongoing video call", "Hang up", "Return to call")
@@ -39,9 +39,20 @@ class WhatsappCallNotificationHeuristicsTest {
     }
 
     @Test
+    fun `ongoing Google Meet notification is treated as a call notification`() {
+        assertTrue(
+            CallNotificationHeuristics.looksLikeCallNotification(
+                category = null,
+                isOngoing = true,
+                fields = listOf("Google Meet", "Meeting in progress", "Leave")
+            )
+        )
+    }
+
+    @Test
     fun `missed call notification is ignored`() {
         assertFalse(
-            WhatsappCallNotificationHeuristics.looksLikeCallNotification(
+            CallNotificationHeuristics.looksLikeCallNotification(
                 category = null,
                 isOngoing = false,
                 fields = listOf("WhatsApp", "Missed call")
@@ -52,7 +63,7 @@ class WhatsappCallNotificationHeuristicsTest {
     @Test
     fun `ordinary chat notification is ignored`() {
         assertFalse(
-            WhatsappCallNotificationHeuristics.looksLikeCallNotification(
+            CallNotificationHeuristics.looksLikeCallNotification(
                 category = "msg",
                 isOngoing = false,
                 fields = listOf("WhatsApp", "2 new messages", "Hey, are you free?")

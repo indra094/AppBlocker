@@ -2,7 +2,7 @@ package com.indrajeet.appblocker.util
 
 import java.util.Locale
 
-object WhatsappCallNotificationHeuristics {
+object CallNotificationHeuristics {
     private val positiveMarkers = listOf(
         "incoming voice call",
         "incoming video call",
@@ -14,6 +14,11 @@ object WhatsappCallNotificationHeuristics {
         "return to call",
         "return to video call",
         "return to voice call",
+        "google meet",
+        "ongoing meeting",
+        "return to meeting",
+        "in a meeting",
+        "meeting",
         "ringing",
         "calling",
         "reconnecting"
@@ -22,7 +27,8 @@ object WhatsappCallNotificationHeuristics {
     private val negativeMarkers = listOf(
         "missed call",
         "call ended",
-        "call declined"
+        "call declined",
+        "meeting ended"
     )
 
     fun looksLikeCallNotification(

@@ -13,7 +13,7 @@
 - Blocks selected websites in supported browsers by reading the visible address bar through the same accessibility service.
 - Redirects blocked website hits to `https://github.com` instead of force-closing the browser.
 - Silences WhatsApp / WhatsApp Business notifications during active WhatsApp app-block windows when Notification Access is enabled.
-- Best-effort watches WhatsApp / WhatsApp Business activity and allows calls only during a configurable Pacific Time window (default `8:00 AM` to `6:30 AM` the next day). Outside that window, it ends visible foreground or minimized call surfaces when Android exposes the in-call controls, and it can use an ongoing WhatsApp call notification's hang-up action before surfacing the full call UI.
+- Best-effort ends WhatsApp / WhatsApp Business and Google Meet calls whenever that app is blocked by an active bucket rule. Call termination uses the same bucket membership, schedule, days, and date range as ordinary app blocking; there are no separate call-only hours.
 - Shows a weekly screen-time tracker when Usage Access is enabled.
 - Stores rules locally with Room.
 - Treats targets as append-only.
@@ -40,7 +40,7 @@ $env:ORG_GRADLE_PROJECT_appblockerLaptopReleaseToken = $env:APPBLOCKER_RELEASE_T
 2. Open AppBlocker and enable:
    - Accessibility service for AppBlocker
    - Battery mode as **Unrestricted**
-   - Notification access for AppBlocker (needed for WhatsApp notification silencing)
+   - Notification access for AppBlocker (needed for WhatsApp notification silencing and best-effort handling of minimized WhatsApp / Google Meet calls)
    - Usage access for AppBlocker (needed for weekly screen-time totals)
 3. Create at least one bucket.
 4. Inside that bucket, add:
@@ -59,11 +59,11 @@ If WhatsApp notifications are not silenced during block windows, the most common
 - notification access is off
 - WhatsApp is not added as a blocked app in an active bucket/time window
 
-If WhatsApp calls are not ended outside the configured Pacific Time window, the most common causes are:
+If WhatsApp or Google Meet calls are not ended while the app is blocked by an active bucket rule, the most common causes are:
 
 - accessibility is off
-- notification access is off, so an ongoing minimized/background call could not be ended from its notification or surfaced when the blocked period started
-- the in-call WhatsApp UI did not expose an accessible end-call control on that device/build
+- notification access is off, so an ongoing minimized/background call could not be ended from its notification or surfaced when the blocked period starts
+- the in-call UI did not expose an accessible end-call control on that device/build
 - Android did not expose the minimized call surface or a notification hang-up action on that device/build
 
 If weekly screen time is empty, the most common causes are:
@@ -106,7 +106,6 @@ Website blocking is best-effort because Android does not expose a universal brow
 - `scripts/install.ps1` install helper
 - `scripts/provision-device-owner.ps1` device-owner helper
 - `scripts/reset-bucket-schedules.ps1` remove time windows from selected buckets on the laptop
-scripts/clear-whatsapp-call-window.ps1 will clear whatsapp call window
 - `scripts/uninstall.ps1` admin removal + uninstall helper (supports optional `-KeepBuckets`)
 
 For iPhone install steps, see `ios/README.md`.
@@ -208,7 +207,7 @@ To keep a bucket but reset its timings from the laptop:
 - By bucket id:
   - `scripts/reset-bucket-schedules.ps1 -BucketId 3,5`
 - By exact bucket name:
-  scripts/reset-bucket-schedules.ps1 -BucketName "blockoutsidewhatsapphours"
+  scripts/reset-bucket-schedules.ps1 -BucketName "social-media"
   scripts/reset-bucket-schedules.ps1 -BucketName "Pokemon\ unite"
   scripts/reset-bucket-schedules.ps1 -BucketName "chrome"
   scripts/reset-bucket-schedules.ps1 -BucketName "whatsapp"
