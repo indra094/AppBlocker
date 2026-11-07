@@ -10,8 +10,6 @@ import com.indrajeet.appblocker.AppBlockerApplication
 import com.indrajeet.appblocker.blocking.RuleEvaluator
 import com.indrajeet.appblocker.blocking.RuleSnapshot
 import com.indrajeet.appblocker.util.WhatsappCallNotificationHeuristics
-import com.indrajeet.appblocker.util.WhatsappCallWindow
-import com.indrajeet.appblocker.util.WhatsappCallWindowConfig
 import java.time.ZonedDateTime
 import java.util.Locale
 import kotlinx.coroutines.CoroutineScope
@@ -29,16 +27,14 @@ class BlockNotificationListenerService : NotificationListenerService() {
     @Volatile
     private var ruleSnapshot: RuleSnapshot = RuleSnapshot(emptyList())
 
-    @Volatile
-    private var whatsappCallWindow: WhatsappCallWindowConfig = WhatsappCallWindow.defaultConfig
 
-    private var lastPromotedWhatsappCallKey: String? = null
-    private var lastPromotedWhatsappCallAt: Long = 0L
+    private var lastPromotedCallKey: String? = null
+    private var lastPromotedCallAt: Long = 0L
 
     private val ticker = object : Runnable {
         override fun run() {
-            runCatching { evaluateActiveWhatsappNotifications() }
-            mainHandler.postDelayed(this, WHATSAPP_CALL_TICK_MS)
+            runCatching { evaluateActiveCallNotifications() }
+            mainHandler.postDelayed(this, CALL_TICK_MS)
         }
     }
 
@@ -52,13 +48,7 @@ class BlockNotificationListenerService : NotificationListenerService() {
         serviceScope.launch {
             repository.observeRuleSnapshot().collectLatest {
                 ruleSnapshot = it
-                cancelActiveBlockedWhatsappNotifications()
-            }
-        }
-        serviceScope.launch {
-            repository.observeWhatsappCallWindow().collectLatest {
-                whatsappCallWindow = it
-                evaluateActiveWhatsappNotifications()
+                cancelActiveBlockedCallNotifications()
             }
         }
         mainHandler.post(ticker)
@@ -77,7 +67,7 @@ class BlockNotificationListenerService : NotificationListenerService() {
                 runCatching { cancelNotification(notification.key) }
             }
         }
-        maybePromoteBlockedWhatsappCall(notification)
+        maybePromoteBlockedCall(notification)
     }
 
     override fun onDestroy() {
@@ -102,7 +92,7 @@ class BlockNotificationListenerService : NotificationListenerService() {
             }
     }
 
-    private fun evaluateActiveWhatsappNotifications() {
+    private fun evaluateActiveCallNotifications() {
         cancelActiveBlockedWhatsappNotifications()
         activeNotifications
             .orEmpty()
@@ -111,17 +101,17 @@ class BlockNotificationListenerService : NotificationListenerService() {
             .forEach(::maybePromoteBlockedWhatsappCall)
     }
 
-    private fun maybePromoteBlockedWhatsappCall(notification: StatusBarNotification) {
+    private fun maybePromoteBlockedCall(notification: StatusBarNotification) {
         if (!isAccessibilityServiceEnabled()) {
             return
         }
-        if (!WhatsappCallWindow.shouldDisconnect(ZonedDateTime.now(), whatsappCallWindow)) {
+        if (RuleEvaluator.activeBucketForPackage(ruleSnapshot, notification.packageName, ZonedDateTime.now()) == null) {
             return
         }
-        if (!looksLikeWhatsappCallNotification(notification)) {
+        if (!looksLikeCallNotification(notification)) {
             return
         }
-        if (!shouldPromoteWhatsappCallNotification(notification.key)) {
+        if (!shouldPromoteCallNotification(notification.key)) {
             return
         }
         if (sendCallEndAction(notification.notification)) {
@@ -155,7 +145,7 @@ class BlockNotificationListenerService : NotificationListenerService() {
         val now = System.currentTimeMillis()
         if (
             notificationKey == lastPromotedWhatsappCallKey &&
-            now - lastPromotedWhatsappCallAt < WHATSAPP_CALL_PROMOTION_COOLDOWN_MS
+            now - lastPromotedWhatsappCallAt < CALL_PROMOTION_COOLDOWN_MS
         ) {
             return false
         }
@@ -173,7 +163,7 @@ class BlockNotificationListenerService : NotificationListenerService() {
                     ?.toString()
                     ?.lowercase(Locale.US)
                     ?.let { title ->
-                        (WHATSAPP_CALL_END_ACTION_MARKERS + MEET_CALL_END_ACTION_MARKERS).any(title::contains)
+                        (CALL_END_ACTION_MARKERS).any(title::contains)
                     } == true
             }
             .any { action ->
@@ -206,7 +196,6 @@ class BlockNotificationListenerService : NotificationListenerService() {
         private val WHATSAPP_PACKAGES = setOf("com.whatsapp", "com.whatsapp.w4b")
         private val MEET_PACKAGES = setOf("com.google.android.apps.meetings", "com.google.android.apps.tachyon")
         private val CALL_APP_PACKAGES = WHATSAPP_PACKAGES + MEET_PACKAGES
-        private val WHATSAPP_CALL_END_ACTION_MARKERS = listOf("end call", "hang up", "hangup", "decline", "leave call")
-        private val MEET_CALL_END_ACTION_MARKERS = listOf("leave", "end call", "hang up", "disconnect")
+        private val CALL_END_ACTION_MARKERS = listOf("leave", "end call", "hang up", "hangup", "decline", "disconnect")
     }
 }
