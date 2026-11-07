@@ -276,7 +276,7 @@ class BlockAccessibilityService : AccessibilityService() {
             return endControl || signals >= 2
         }
         val active = rootInActiveWindow
-        if (active != null && (active.packageName?.toString() in MEET_PACKAGES || activePackage in MEET_PACKAGES) &&
+        if (active != null && (active.packageName?.toString() in MEET_PACKAGES) &&
             looksLikeMeetCall(active)) return active
         return runCatching { windows }.getOrNull().orEmpty().asSequence()
             .mapNotNull { runCatching { it.root }.getOrNull() }
@@ -431,7 +431,7 @@ class BlockAccessibilityService : AccessibilityService() {
         val activeRoot = rootInActiveWindow
         if (
             activeRoot != null &&
-            (activeRoot.packageName?.toString() in WHATSAPP_PACKAGES || activePackage in WHATSAPP_PACKAGES) &&
+            (activeRoot.packageName?.toString() in WHATSAPP_PACKAGES) &&
             looksLikeWhatsappCall(activeRoot)
         ) {
             return activeRoot
