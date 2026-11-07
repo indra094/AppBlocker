@@ -234,9 +234,9 @@ class BlockAccessibilityService : AccessibilityService() {
         val disconnected = tapWhatsappEndCall(root)
         triggerBlock(
             reason = if (disconnected) {
-                "WhatsApp call ended outside the allowed ${the app's active block rule} window"
+                "WhatsApp call ended because the app is blocked"
             } else {
-                "WhatsApp call detected outside the allowed ${the app's active block rule} window"
+                "WhatsApp call detected while the app is blocked"
             },
             target = targetPackage,
             forceHome = false,
@@ -280,17 +280,17 @@ class BlockAccessibilityService : AccessibilityService() {
     }
 
     private fun handleWhatsappActivityEvent(event: AccessibilityEvent) {
+        val packageName = event.packageName?.toString() ?: return
         if (!isPackageBlocked(packageName, ZonedDateTime.now())) {
             return
         }
-        val packageName = event.packageName?.toString() ?: return
         if (packageName !in WHATSAPP_PACKAGES) {
             return
         }
         disconnectWhatsappCallWhenBlocked(packageName, ZonedDateTime.now())
     }
 
-private fun isPackageBlocked(packageName: String, now: ZonedDateTime): Boolean =
+    private fun isPackageBlocked(packageName: String, now: ZonedDateTime): Boolean =
         RuleEvaluator.activeBucketForPackage(ruleSnapshot, packageName, now) != null
 
     private fun isProtectedAccessibilityManagementScreen(): Boolean {
