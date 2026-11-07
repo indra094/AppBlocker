@@ -9,7 +9,7 @@ import android.service.notification.StatusBarNotification
 import com.indrajeet.appblocker.AppBlockerApplication
 import com.indrajeet.appblocker.blocking.RuleEvaluator
 import com.indrajeet.appblocker.blocking.RuleSnapshot
-import com.indrajeet.appblocker.util.WhatsappCallNotificationHeuristics
+import com.indrajeet.appblocker.util.CallNotificationHeuristics
 import java.time.ZonedDateTime
 import java.util.Locale
 import kotlinx.coroutines.CoroutineScope
@@ -126,7 +126,7 @@ class BlockNotificationListenerService : NotificationListenerService() {
         val actionTitles = payload.actions
             ?.map { action -> action.title?.toString() }
             .orEmpty()
-        return WhatsappCallNotificationHeuristics.looksLikeCallNotification(
+        return CallNotificationHeuristics.looksLikeCallNotification(
             category = payload.category,
             isOngoing = payload.flags and Notification.FLAG_ONGOING_EVENT != 0,
             fields = listOf(
