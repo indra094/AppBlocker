@@ -16,8 +16,6 @@ import com.indrajeet.appblocker.blocking.RuleEvaluator
 import com.indrajeet.appblocker.blocking.RuleSnapshot
 import com.indrajeet.appblocker.ui.BlockedActivity
 import com.indrajeet.appblocker.util.HostNormalizer
-import com.indrajeet.appblocker.util.WhatsappCallWindow
-import com.indrajeet.appblocker.util.WhatsappCallWindowConfig
 import java.time.ZonedDateTime
 import java.util.Locale
 import kotlinx.coroutines.CoroutineScope
@@ -37,8 +35,6 @@ class BlockAccessibilityService : AccessibilityService() {
     @Volatile
     private var currentPackage: String? = null
 
-    @Volatile
-    private var whatsappCallWindow: WhatsappCallWindowConfig = WhatsappCallWindow.defaultConfig
 
     private val settingsPackages = mutableSetOf<String>()
 
@@ -102,11 +98,6 @@ class BlockAccessibilityService : AccessibilityService() {
                     ruleSnapshot = it
                 }
             }
-            serviceScope.launch {
-                repository.observeWhatsappCallWindow().collectLatest {
-                    whatsappCallWindow = it
-                }
-            }
             mainHandler.post(ticker)
         }
             .onFailure { Log.e(TAG, "Failed to initialize accessibility service", it) }
@@ -152,12 +143,12 @@ class BlockAccessibilityService : AccessibilityService() {
             }
             if (isWhatsappActivityEvent) {
                 handleWhatsappActivityEvent(currentEvent)
-                if (packageName in WHATSAPP_PACKAGES && isOutsideWhatsappCallWindow()) {
+                if (packageName in WHATSAPP_PACKAGES && isPackageBlocked(packageName, ZonedDateTime.now())) {
                     return
                 }
             }
-            if (isMeetActivityEvent && isOutsideWhatsappCallWindow()) {
-                disconnectMeetCallOutsideAllowedWindow(packageName, ZonedDateTime.now())
+            if (isMeetActivityEvent && isPackageBlocked(packageName, ZonedDateTime.now())) {
+                disconnectMeetCallWhenBlocked(packageName, ZonedDateTime.now())
                 return
             }
             evaluateCurrentContext()
@@ -179,8 +170,8 @@ class BlockAccessibilityService : AccessibilityService() {
             currentPackage = activePackage
         }
         val now = ZonedDateTime.now()
-        if (disconnectWhatsappCallOutsideAllowedWindow(activePackage, now) ||
-            disconnectMeetCallOutsideAllowedWindow(activePackage, now)) {
+        if (disconnectWhatsappCallWhenBlocked(activePackage, now) ||
+            disconnectMeetCallWhenBlocked(activePackage, now)) {
             return
         }
 
@@ -233,25 +224,19 @@ class BlockAccessibilityService : AccessibilityService() {
         }
     }
 
-    private fun disconnectWhatsappCallOutsideAllowedWindow(
+    private fun disconnectWhatsappCallWhenBlocked(
         activePackage: String?,
         now: ZonedDateTime
     ): Boolean {
-        val currentWindow = whatsappCallWindow
-        if (!WhatsappCallWindow.shouldDisconnect(now, currentWindow)) {
-            return false
-        }
+        val targetPackage = activePackage?.takeIf { it in WHATSAPP_PACKAGES } ?: WHATSAPP_PACKAGES.first()
+        if (!isPackageBlocked(targetPackage, now)) return false
         val root = findVisibleWhatsappCallRoot(activePackage) ?: return false
-        val targetPackage = root.packageName?.toString()?.takeIf { it in WHATSAPP_PACKAGES }
-            ?: activePackage?.takeIf { it in WHATSAPP_PACKAGES }
-            ?: WHATSAPP_PACKAGES.first()
-
         val disconnected = tapWhatsappEndCall(root)
         triggerBlock(
             reason = if (disconnected) {
-                "WhatsApp call ended outside the allowed ${WhatsappCallWindow.description(currentWindow)} window"
+                "WhatsApp call ended outside the allowed ${the app's active block rule} window"
             } else {
-                "WhatsApp call detected outside the allowed ${WhatsappCallWindow.description(currentWindow)} window"
+                "WhatsApp call detected outside the allowed ${the app's active block rule} window"
             },
             target = targetPackage,
             forceHome = false,
@@ -261,15 +246,16 @@ class BlockAccessibilityService : AccessibilityService() {
         return true
     }
 
-    private fun disconnectMeetCallOutsideAllowedWindow(activePackage: String?, now: ZonedDateTime): Boolean {
-        if (!WhatsappCallWindow.shouldDisconnect(now, whatsappCallWindow)) return false
+    private fun disconnectMeetCallWhenBlocked(activePackage: String?, now: ZonedDateTime): Boolean {
+        val targetPackage = activePackage?.takeIf { it in MEET_PACKAGES } ?: MEET_PACKAGES.first()
+        if (!isPackageBlocked(targetPackage, now)) return false
         val root = findMeetCallRoot(activePackage) ?: return false
-        val target = root.packageName?.toString()?.takeIf { it in MEET_PACKAGES } ?: activePackage ?: MEET_PACKAGES.first()
+        val target = root.packageName?.toString()?.takeIf { it in MEET_PACKAGES } ?: targetPackage
         val ended = forEachNode(root) { node ->
             if (nodeMatchesAnyMarker(node, MEET_END_MARKERS, MEET_END_IDS)) clickNodeOrParent(node) else false
         }
         triggerBlock(
-            reason = if (ended) "Google Meet call ended outside allowed window" else "Google Meet call detected outside allowed window",
+            reason = if (ended) "Google Meet call ended while the app is blocked" else "Google Meet call detected while the app is blocked",
             target = target, forceHome = false, minIntervalMs = 5_000, showBlockedScreen = false
         )
         return true
@@ -294,19 +280,22 @@ class BlockAccessibilityService : AccessibilityService() {
     }
 
     private fun handleWhatsappActivityEvent(event: AccessibilityEvent) {
-        if (!isOutsideWhatsappCallWindow()) {
+        if (!isPackageBlocked(packageName, ZonedDateTime.now())) {
             return
         }
         val packageName = event.packageName?.toString() ?: return
         if (packageName !in WHATSAPP_PACKAGES) {
             return
         }
-        disconnectWhatsappCallOutsideAllowedWindow(packageName, ZonedDateTime.now())
+        disconnectWhatsappCallWhenBlocked(packageName, ZonedDateTime.now())
     }
 
-    private fun isOutsideWhatsappCallWindow(): Boolean {
+    private fun isPackageBlocked(packageName, ZonedDateTime.now()): Boolean {
         return WhatsappCallWindow.shouldDisconnect(ZonedDateTime.now(), whatsappCallWindow)
     }
+
+    private fun isPackageBlocked(packageName: String, now: ZonedDateTime): Boolean =
+        RuleEvaluator.activeBucketForPackage(ruleSnapshot, packageName, now) != null
 
     private fun isProtectedAccessibilityManagementScreen(): Boolean {
         if (!isManagementProtectionActive()) {
