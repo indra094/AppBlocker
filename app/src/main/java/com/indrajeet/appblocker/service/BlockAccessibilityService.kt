@@ -222,37 +222,48 @@ class BlockAccessibilityService : AccessibilityService() {
         activePackage: String?,
         now: ZonedDateTime
     ): Boolean {
-        val targetPackage = activePackage?.takeIf { it in WHATSAPP_PACKAGES } ?: WHATSAPP_PACKAGES.first()
-        if (!isPackageBlocked(targetPackage, now)) return false
-        val root = findVisibleWhatsappCallRoot(activePackage) ?: return false
-        val disconnected = tapWhatsappEndCall(root)
-        triggerBlock(
-            reason = if (disconnected) {
-                "WhatsApp call ended because the app is blocked"
-            } else {
-                "WhatsApp call detected while the app is blocked"
-            },
-            target = targetPackage,
-            forceHome = false,
-            minIntervalMs = 5_000,
-            showBlockedScreen = false
-        )
-        return true
+        val candidates = activePackage?.takeIf { it in WHATSAPP_PACKAGES }
+            ?.let(::listOf) ?: WHATSAPP_PACKAGES.toList()
+        for (targetPackage in candidates) {
+            if (!isPackageBlocked(targetPackage, now)) continue
+            val root = findVisibleWhatsappCallRoot(targetPackage) ?: continue
+            val disconnected = tapWhatsappEndCall(root)
+            triggerBlock(
+                reason = if (disconnected) {
+                    "WhatsApp call ended because the app is blocked"
+                } else {
+                    "WhatsApp call detected while the app is blocked"
+                },
+                target = targetPackage,
+                forceHome = false,
+                minIntervalMs = 5_000,
+                showBlockedScreen = false
+            )
+            return true
+        }
+        return false
     }
 
     private fun disconnectMeetCallWhenBlocked(activePackage: String?, now: ZonedDateTime): Boolean {
-        val targetPackage = activePackage?.takeIf { it in MEET_PACKAGES } ?: MEET_PACKAGES.first()
-        if (!isPackageBlocked(targetPackage, now)) return false
-        val root = findMeetCallRoot(activePackage) ?: return false
-        val target = root.packageName?.toString()?.takeIf { it in MEET_PACKAGES } ?: targetPackage
-        val ended = forEachNode(root) { node ->
-            if (nodeMatchesAnyMarker(node, MEET_END_MARKERS, MEET_END_IDS)) clickNodeOrParent(node) else false
+        val candidates = activePackage?.takeIf { it in MEET_PACKAGES }
+            ?.let(::listOf) ?: MEET_PACKAGES.toList()
+        for (targetPackage in candidates) {
+            if (!isPackageBlocked(targetPackage, now)) continue
+            val root = findMeetCallRoot(targetPackage) ?: continue
+            val actualPackage = root.packageName?.toString()?.takeIf { it in MEET_PACKAGES } ?: targetPackage
+            val ended = forEachNode(root) { node ->
+                if (nodeMatchesAnyMarker(node, MEET_END_MARKERS, MEET_END_IDS)) clickNodeOrParent(node) else false
+            }
+            triggerBlock(
+                reason = if (ended) "Google Meet call ended because the app is blocked" else "Google Meet call detected while the app is blocked",
+                target = actualPackage,
+                forceHome = false,
+                minIntervalMs = 5_000,
+                showBlockedScreen = false
+            )
+            return true
         }
-        triggerBlock(
-            reason = if (ended) "Google Meet call ended while the app is blocked" else "Google Meet call detected while the app is blocked",
-            target = target, forceHome = false, minIntervalMs = 5_000, showBlockedScreen = false
-        )
-        return true
+        return false
     }
 
     private fun findMeetCallRoot(activePackage: String?): AccessibilityNodeInfo? {
