@@ -49,10 +49,11 @@ class BlockAccessibilityService : AccessibilityService() {
         private const val TAG = "BlockAccessibility"
         private const val SAFE_REDIRECT_URL = "https://github.com"
         private const val SAFE_REDIRECT_HOST = "github.com"
-        private val WHATSAPP_PACKAGES = setOf(
-            "com.whatsapp",
-            "com.whatsapp.w4b"
-        )
+        private val WHATSAPP_PACKAGES = setOf("com.whatsapp", "com.whatsapp.w4b")
+        private val MEET_PACKAGES = setOf("com.google.android.apps.meetings", "com.google.android.apps.tachyon")
+        private val MEET_END_MARKERS = listOf("leave call", "leave meeting", "end call", "hang up", "disconnect")
+        private val MEET_END_IDS = listOf("leave_call", "leave_meeting", "end_call", "hangup", "disconnect")
+        private val MEET_CALL_MARKERS = listOf("mute", "microphone", "camera", "captions", "participants", "share screen", "stop presenting", "meeting details", "chat")
         private val WHATSAPP_END_CALL_MARKERS = listOf(
             "end call",
             "hang up",
@@ -139,7 +140,10 @@ class BlockAccessibilityService : AccessibilityService() {
                             eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED ||
                             eventType == AccessibilityEvent.TYPE_VIEW_CLICKED
                         )
-            if (!isWindowChangeEvent && !isBrowserContentEvent && !isWhatsappActivityEvent) {
+            val isMeetActivityEvent = packageName in MEET_PACKAGES &&
+                (isWindowChangeEvent || eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED ||
+                    eventType == AccessibilityEvent.TYPE_VIEW_CLICKED)
+            if (!isWindowChangeEvent && !isBrowserContentEvent && !isWhatsappActivityEvent && !isMeetActivityEvent) {
                 return
             }
             when {
@@ -151,6 +155,10 @@ class BlockAccessibilityService : AccessibilityService() {
                 if (packageName in WHATSAPP_PACKAGES && isOutsideWhatsappCallWindow()) {
                     return
                 }
+            }
+            if (isMeetActivityEvent && isOutsideWhatsappCallWindow()) {
+                disconnectMeetCallOutsideAllowedWindow(packageName, ZonedDateTime.now())
+                return
             }
             evaluateCurrentContext()
         }
@@ -171,7 +179,8 @@ class BlockAccessibilityService : AccessibilityService() {
             currentPackage = activePackage
         }
         val now = ZonedDateTime.now()
-        if (disconnectWhatsappCallOutsideAllowedWindow(activePackage, now)) {
+        if (disconnectWhatsappCallOutsideAllowedWindow(activePackage, now) ||
+            disconnectMeetCallOutsideAllowedWindow(activePackage, now)) {
             return
         }
 
@@ -250,6 +259,38 @@ class BlockAccessibilityService : AccessibilityService() {
             showBlockedScreen = false
         )
         return true
+    }
+
+    private fun disconnectMeetCallOutsideAllowedWindow(activePackage: String?, now: ZonedDateTime): Boolean {
+        if (!WhatsappCallWindow.shouldDisconnect(now, whatsappCallWindow)) return false
+        val root = findMeetCallRoot(activePackage) ?: return false
+        val target = root.packageName?.toString()?.takeIf { it in MEET_PACKAGES } ?: activePackage ?: MEET_PACKAGES.first()
+        val ended = forEachNode(root) { node ->
+            if (nodeMatchesAnyMarker(node, MEET_END_MARKERS, MEET_END_IDS)) clickNodeOrParent(node) else false
+        }
+        triggerBlock(
+            reason = if (ended) "Google Meet call ended outside allowed window" else "Google Meet call detected outside allowed window",
+            target = target, forceHome = false, minIntervalMs = 5_000, showBlockedScreen = false
+        )
+        return true
+    }
+
+    private fun findMeetCallRoot(activePackage: String?): AccessibilityNodeInfo? {
+        fun looksLikeMeetCall(root: AccessibilityNodeInfo): Boolean {
+            var signals = 0
+            val endControl = forEachNode(root) { node ->
+                if (nodeMatchesAnyMarker(node, MEET_END_MARKERS, MEET_END_IDS)) true
+                else { if (nodeMatchesAnyMarker(node, MEET_CALL_MARKERS, emptyList())) signals++; false }
+            }
+            return endControl || signals >= 2
+        }
+        val active = rootInActiveWindow
+        if (active != null && (active.packageName?.toString() in MEET_PACKAGES || activePackage in MEET_PACKAGES) &&
+            looksLikeMeetCall(active)) return active
+        return runCatching { windows }.getOrNull().orEmpty().asSequence()
+            .mapNotNull { runCatching { it.root }.getOrNull() }
+            .filter { it.packageName?.toString() in MEET_PACKAGES }
+            .firstOrNull(::looksLikeMeetCall)
     }
 
     private fun handleWhatsappActivityEvent(event: AccessibilityEvent) {
