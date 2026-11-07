@@ -93,7 +93,7 @@ class BlockNotificationListenerService : NotificationListenerService() {
     }
 
     private fun evaluateActiveCallNotifications() {
-        cancelActiveBlockedWhatsappNotifications()
+        cancelActiveBlockedCallNotifications()
         activeNotifications
             .orEmpty()
             .asSequence()
@@ -149,8 +149,8 @@ class BlockNotificationListenerService : NotificationListenerService() {
         ) {
             return false
         }
-        lastPromotedWhatsappCallKey = notificationKey
-        lastPromotedWhatsappCallAt = now
+        lastPromotedCallKey = notificationKey
+        lastPromotedCallAt = now
         return true
     }
 
