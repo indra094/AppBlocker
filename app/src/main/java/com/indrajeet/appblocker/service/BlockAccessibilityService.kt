@@ -143,13 +143,9 @@ class BlockAccessibilityService : AccessibilityService() {
             }
             if (isWhatsappActivityEvent) {
                 handleWhatsappActivityEvent(currentEvent)
-                if (packageName in WHATSAPP_PACKAGES && isPackageBlocked(packageName, ZonedDateTime.now())) {
-                    return
-                }
             }
             if (isMeetActivityEvent && isPackageBlocked(packageName, ZonedDateTime.now())) {
                 disconnectMeetCallWhenBlocked(packageName, ZonedDateTime.now())
-                return
             }
             evaluateCurrentContext()
         }
@@ -170,10 +166,8 @@ class BlockAccessibilityService : AccessibilityService() {
             currentPackage = activePackage
         }
         val now = ZonedDateTime.now()
-        if (disconnectWhatsappCallWhenBlocked(activePackage, now) ||
-            disconnectMeetCallWhenBlocked(activePackage, now)) {
-            return
-        }
+        disconnectWhatsappCallWhenBlocked(activePackage, now)
+        disconnectMeetCallWhenBlocked(activePackage, now)
 
         val foregroundPackage = activePackage ?: return
         if (foregroundPackage in settingsPackages && isProtectedAccessibilityManagementScreen()) {
