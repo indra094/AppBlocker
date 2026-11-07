@@ -63,11 +63,14 @@ class BlockNotificationListenerService : NotificationListenerService() {
         val snapshot = ruleSnapshot
         if (snapshot.buckets.isNotEmpty()) {
             val now = ZonedDateTime.now()
-            if (RuleEvaluator.activeBucketForPackage(snapshot, packageName, now) != null) {
-                runCatching { cancelNotification(notification.key) }
+            val blocked = RuleEvaluator.activeBucketForPackage(snapshot, packageName, now) != null
+            if (blocked) {
+                maybePromoteBlockedCall(notification)
+                if (packageName in WHATSAPP_PACKAGES || looksLikeCallNotification(notification)) {
+                    runCatching { cancelNotification(notification.key) }
+                }
             }
         }
-        maybePromoteBlockedCall(notification)
     }
 
     override fun onDestroy() {
@@ -88,7 +91,10 @@ class BlockNotificationListenerService : NotificationListenerService() {
             .filter { it.packageName in CALL_APP_PACKAGES }
             .filter { RuleEvaluator.activeBucketForPackage(snapshot, it.packageName, now) != null }
             .forEach { sbn ->
-                runCatching { cancelNotification(sbn.key) }
+                if (sbn.packageName in WHATSAPP_PACKAGES || looksLikeCallNotification(sbn)) {
+                    maybePromoteBlockedCall(sbn)
+                    runCatching { cancelNotification(sbn.key) }
+                }
             }
     }
 
