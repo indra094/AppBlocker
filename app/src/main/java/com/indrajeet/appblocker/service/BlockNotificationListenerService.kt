@@ -6,6 +6,7 @@ import android.os.Looper
 import android.provider.Settings
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
+import android.util.Log
 import com.indrajeet.appblocker.AppBlockerApplication
 import com.indrajeet.appblocker.blocking.RuleEvaluator
 import com.indrajeet.appblocker.blocking.RuleSnapshot
@@ -34,6 +35,7 @@ class BlockNotificationListenerService : NotificationListenerService() {
     private val ticker = object : Runnable {
         override fun run() {
             runCatching { evaluateActiveCallNotifications() }
+                .onFailure { Log.e(TAG, "Active call notification scan failed", it) }
             mainHandler.postDelayed(this, CALL_TICK_MS)
         }
     }
@@ -117,8 +119,10 @@ class BlockNotificationListenerService : NotificationListenerService() {
         if (!shouldPromoteCallNotification(notification.key)) {
             return
         }
+        Log.i(TAG, "Blocked ongoing call notification detected for ${notification.packageName}")
         // A notification-provided hang-up / Leave action does not require Accessibility.
         if (sendCallEndAction(notification.notification)) {
+            Log.i(TAG, "Sent call-end action for ${notification.packageName}")
             return
         }
         // Accessibility is only needed for the fallback that opens the in-call UI.
@@ -219,6 +223,7 @@ class BlockNotificationListenerService : NotificationListenerService() {
     }
 
     companion object {
+        private const val TAG = "BlockNotificationListener"
         private const val CALL_TICK_MS = 2_000L
         private const val CALL_PROMOTION_COOLDOWN_MS = 10_000L
         private val WHATSAPP_PACKAGES = setOf("com.whatsapp", "com.whatsapp.w4b")
