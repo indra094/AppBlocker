@@ -132,19 +132,37 @@ class BlockNotificationListenerService : NotificationListenerService() {
         val actionTitles = payload.actions
             ?.map { action -> action.title?.toString() }
             .orEmpty()
-        return CallNotificationHeuristics.looksLikeCallNotification(
+        val fields = listOf(
+            payload.tickerText?.toString(),
+            extras?.getCharSequence(Notification.EXTRA_TITLE)?.toString(),
+            extras?.getCharSequence(Notification.EXTRA_TEXT)?.toString(),
+            extras?.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString(),
+            extras?.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString(),
+            extras?.getCharSequence(Notification.EXTRA_INFO_TEXT)?.toString(),
+            extras?.getCharSequence(Notification.EXTRA_SUMMARY_TEXT)?.toString()
+        ) + actionTitles
+        val isOngoing = payload.flags and
+            (Notification.FLAG_ONGOING_EVENT or Notification.FLAG_NO_CLEAR) != 0
+        val recognized = CallNotificationHeuristics.looksLikeCallNotification(
             category = payload.category,
-            isOngoing = payload.flags and Notification.FLAG_ONGOING_EVENT != 0,
-            fields = listOf(
-                payload.tickerText?.toString(),
-                extras?.getCharSequence(Notification.EXTRA_TITLE)?.toString(),
-                extras?.getCharSequence(Notification.EXTRA_TEXT)?.toString(),
-                extras?.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString(),
-                extras?.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString(),
-                extras?.getCharSequence(Notification.EXTRA_INFO_TEXT)?.toString(),
-                extras?.getCharSequence(Notification.EXTRA_SUMMARY_TEXT)?.toString()
-            ) + actionTitles
+            isOngoing = isOngoing,
+            fields = fields
         )
+        if (recognized) return true
+
+        // Meet can publish its in-call notification as an ongoing service notification
+        // without the CALL category or the standard ongoing-event flag. Treat an
+        // ongoing Meet notification with meeting-related text as a call surface so
+        // a bucket becoming active midway through a meeting can surface/end that call.
+        if (notification.packageName in MEET_PACKAGES && isOngoing) {
+            return fields.filterNotNull().any { value ->
+                val normalized = value.lowercase(Locale.US)
+                normalized.contains("meet") ||
+                    normalized.contains("meeting") ||
+                    normalized.contains("call")
+            }
+        }
+        return false
     }
 
     private fun shouldPromoteCallNotification(notificationKey: String): Boolean {
@@ -197,7 +215,7 @@ class BlockNotificationListenerService : NotificationListenerService() {
     }
 
     companion object {
-        private const val CALL_TICK_MS = 5_000L
+        private const val CALL_TICK_MS = 2_000L
         private const val CALL_PROMOTION_COOLDOWN_MS = 10_000L
         private val WHATSAPP_PACKAGES = setOf("com.whatsapp", "com.whatsapp.w4b")
         private val MEET_PACKAGES = setOf("com.google.android.apps.meetings", "com.google.android.apps.tachyon")
