@@ -78,7 +78,7 @@ class BlockAccessibilityService : AccessibilityService() {
         override fun run() {
             runCatching { evaluateCurrentContext() }
                 .onFailure { Log.e(TAG, "Ticker evaluation failed", it) }
-            mainHandler.postDelayed(this, 5_000)
+            mainHandler.postDelayed(this, 2_000)
         }
     }
 

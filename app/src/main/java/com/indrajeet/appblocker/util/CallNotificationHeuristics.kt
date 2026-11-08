@@ -52,4 +52,19 @@ object CallNotificationHeuristics {
         }
         return markerCount >= 2 || (isOngoing && markerCount >= 1)
     }
+
+    fun looksLikeOngoingMeetNotification(
+        isOngoing: Boolean,
+        fields: List<String?>
+    ): Boolean {
+        if (!isOngoing) return false
+        val normalizedFields = fields.filterNotNull().map { it.lowercase(Locale.US) }
+        val endedOrMissed = normalizedFields.any { value ->
+            value.contains("missed call") ||
+                value.contains("call ended") ||
+                value.contains("meeting ended") ||
+                value.contains("call declined")
+        }
+        return !endedOrMissed
+    }
 }
