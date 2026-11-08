@@ -70,4 +70,34 @@ class CallNotificationHeuristicsTest {
             )
         )
     }
+    @Test
+    fun `ongoing Meet service notification is recognized even with generic text`() {
+        assertTrue(
+            CallNotificationHeuristics.looksLikeOngoingMeetNotification(
+                isOngoing = true,
+                fields = listOf("Meet")
+            )
+        )
+    }
+
+    @Test
+    fun `ended Meet notification is not treated as an active call`() {
+        assertFalse(
+            CallNotificationHeuristics.looksLikeOngoingMeetNotification(
+                isOngoing = true,
+                fields = listOf("Google Meet", "Meeting ended")
+            )
+        )
+    }
+
+    @Test
+    fun `non ongoing Meet notification is not treated as an active call`() {
+        assertFalse(
+            CallNotificationHeuristics.looksLikeOngoingMeetNotification(
+                isOngoing = false,
+                fields = listOf("Google Meet", "Meeting")
+            )
+        )
+    }
+
 }
