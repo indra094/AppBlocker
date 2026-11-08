@@ -157,10 +157,12 @@ class BlockNotificationListenerService : NotificationListenerService() {
         // ongoing Meet notification with meeting-related text as a call surface so
         // a bucket becoming active midway through a meeting can surface/end that call.
         if (notification.packageName in MEET_PACKAGES) {
-            // Meet's active-call service notification is the reliable signal when
-            // its title/text/category vary across app versions and locales.
+            // Some Meet versions mark the active-call notification as CATEGORY_SERVICE
+            // instead of setting the standard ongoing flags.
+            val isMeetServiceNotification = isOngoing ||
+                payload.category.equals(Notification.CATEGORY_SERVICE, ignoreCase = true)
             return CallNotificationHeuristics.looksLikeOngoingMeetNotification(
-                isOngoing = isOngoing,
+                isOngoing = isMeetServiceNotification,
                 fields = fields
             )
         }
