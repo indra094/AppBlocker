@@ -6,6 +6,7 @@ import android.os.Looper
 import android.provider.Settings
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
+import android.util.Log
 import com.indrajeet.appblocker.AppBlockerApplication
 import com.indrajeet.appblocker.blocking.RuleEvaluator
 import com.indrajeet.appblocker.blocking.RuleSnapshot
@@ -34,6 +35,7 @@ class BlockNotificationListenerService : NotificationListenerService() {
     private val ticker = object : Runnable {
         override fun run() {
             runCatching { evaluateActiveCallNotifications() }
+                .onFailure { Log.e(TAG, "Active call notification scan failed", it) }
             mainHandler.postDelayed(this, CALL_TICK_MS)
         }
     }
@@ -108,9 +110,6 @@ class BlockNotificationListenerService : NotificationListenerService() {
     }
 
     private fun maybePromoteBlockedCall(notification: StatusBarNotification) {
-        if (!isAccessibilityServiceEnabled()) {
-            return
-        }
         if (RuleEvaluator.activeBucketForPackage(ruleSnapshot, notification.packageName, ZonedDateTime.now()) == null) {
             return
         }
@@ -120,7 +119,14 @@ class BlockNotificationListenerService : NotificationListenerService() {
         if (!shouldPromoteCallNotification(notification.key)) {
             return
         }
+        Log.i(TAG, "Blocked ongoing call notification detected for ${notification.packageName}")
+        // A notification-provided hang-up / Leave action does not require Accessibility.
         if (sendCallEndAction(notification.notification)) {
+            Log.i(TAG, "Sent call-end action for ${notification.packageName}")
+            return
+        }
+        // Accessibility is only needed for the fallback that opens the in-call UI.
+        if (!isAccessibilityServiceEnabled()) {
             return
         }
         sendCallSurfaceIntent(notification.notification)
@@ -132,19 +138,39 @@ class BlockNotificationListenerService : NotificationListenerService() {
         val actionTitles = payload.actions
             ?.map { action -> action.title?.toString() }
             .orEmpty()
-        return CallNotificationHeuristics.looksLikeCallNotification(
+        val fields = listOf(
+            payload.tickerText?.toString(),
+            extras?.getCharSequence(Notification.EXTRA_TITLE)?.toString(),
+            extras?.getCharSequence(Notification.EXTRA_TEXT)?.toString(),
+            extras?.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString(),
+            extras?.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString(),
+            extras?.getCharSequence(Notification.EXTRA_INFO_TEXT)?.toString(),
+            extras?.getCharSequence(Notification.EXTRA_SUMMARY_TEXT)?.toString()
+        ) + actionTitles
+        val isOngoing = payload.flags and
+            (Notification.FLAG_ONGOING_EVENT or Notification.FLAG_NO_CLEAR) != 0
+        val recognized = CallNotificationHeuristics.looksLikeCallNotification(
             category = payload.category,
-            isOngoing = payload.flags and Notification.FLAG_ONGOING_EVENT != 0,
-            fields = listOf(
-                payload.tickerText?.toString(),
-                extras?.getCharSequence(Notification.EXTRA_TITLE)?.toString(),
-                extras?.getCharSequence(Notification.EXTRA_TEXT)?.toString(),
-                extras?.getCharSequence(Notification.EXTRA_BIG_TEXT)?.toString(),
-                extras?.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString(),
-                extras?.getCharSequence(Notification.EXTRA_INFO_TEXT)?.toString(),
-                extras?.getCharSequence(Notification.EXTRA_SUMMARY_TEXT)?.toString()
-            ) + actionTitles
+            isOngoing = isOngoing,
+            fields = fields
         )
+        if (recognized) return true
+
+        // Meet can publish its in-call notification as an ongoing service notification
+        // without the CALL category or the standard ongoing-event flag. Treat an
+        // ongoing Meet notification with meeting-related text as a call surface so
+        // a bucket becoming active midway through a meeting can surface/end that call.
+        if (notification.packageName in MEET_PACKAGES) {
+            // Some Meet versions mark the active-call notification as CATEGORY_SERVICE
+            // instead of setting the standard ongoing flags.
+            val isMeetServiceNotification = isOngoing ||
+                payload.category.equals(Notification.CATEGORY_SERVICE, ignoreCase = true)
+            return CallNotificationHeuristics.looksLikeOngoingMeetNotification(
+                isOngoing = isMeetServiceNotification,
+                fields = fields
+            )
+        }
+        return false
     }
 
     private fun shouldPromoteCallNotification(notificationKey: String): Boolean {
@@ -197,7 +223,8 @@ class BlockNotificationListenerService : NotificationListenerService() {
     }
 
     companion object {
-        private const val CALL_TICK_MS = 5_000L
+        private const val TAG = "BlockNotificationListener"
+        private const val CALL_TICK_MS = 2_000L
         private const val CALL_PROMOTION_COOLDOWN_MS = 10_000L
         private val WHATSAPP_PACKAGES = setOf("com.whatsapp", "com.whatsapp.w4b")
         private val MEET_PACKAGES = setOf("com.google.android.apps.meetings", "com.google.android.apps.tachyon")
