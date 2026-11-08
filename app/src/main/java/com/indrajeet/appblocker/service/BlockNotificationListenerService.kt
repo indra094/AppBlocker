@@ -108,9 +108,6 @@ class BlockNotificationListenerService : NotificationListenerService() {
     }
 
     private fun maybePromoteBlockedCall(notification: StatusBarNotification) {
-        if (!isAccessibilityServiceEnabled()) {
-            return
-        }
         if (RuleEvaluator.activeBucketForPackage(ruleSnapshot, notification.packageName, ZonedDateTime.now()) == null) {
             return
         }
@@ -120,7 +117,12 @@ class BlockNotificationListenerService : NotificationListenerService() {
         if (!shouldPromoteCallNotification(notification.key)) {
             return
         }
+        // A notification-provided hang-up / Leave action does not require Accessibility.
         if (sendCallEndAction(notification.notification)) {
+            return
+        }
+        // Accessibility is only needed for the fallback that opens the in-call UI.
+        if (!isAccessibilityServiceEnabled()) {
             return
         }
         sendCallSurfaceIntent(notification.notification)
