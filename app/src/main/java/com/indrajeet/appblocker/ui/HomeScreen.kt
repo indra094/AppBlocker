@@ -168,7 +168,11 @@ fun HomeScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(title = { Text("AppBlocker") }, actions = {\n                TextButton(onClick = { exportSchedulesLauncher.launch("AppBlocker-schedules.json") }) {\n                    Text("Export schedules")\n                }\n            })
+            TopAppBar(title = { Text("AppBlocker") }, actions = {
+                TextButton(onClick = { exportSchedulesLauncher.launch("AppBlocker-schedules.json") }) {
+                    Text("Export schedules")
+                }
+            })
         },
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
