@@ -1,6 +1,9 @@
 package com.indrajeet.appblocker.ui
 
 import android.content.Context
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.Canvas
 import android.os.PowerManager
@@ -63,6 +66,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import org.json.JSONArray
+import org.json.JSONObject
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -79,6 +84,7 @@ import com.indrajeet.appblocker.util.ScreenTimeTracker
 import com.indrajeet.appblocker.util.ScheduleFormatter
 import com.indrajeet.appblocker.util.WeeklyUsageSummary
 import java.time.DayOfWeek
+import java.time.LocalTime
 import java.time.LocalDate
 import kotlin.math.max
 import kotlinx.coroutines.launch
@@ -123,6 +129,23 @@ fun HomeScreen(
         }
     }
 
+    val exportSchedulesLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/json")
+    ) { uri: Uri? ->
+        if (uri != null) {
+            runCatching {
+                val exportJson = buildScheduleExportJson(uiState.buckets)
+                context.contentResolver.openOutputStream(uri)?.use { output ->
+                    output.write(exportJson.toByteArray(Charsets.UTF_8))
+                } ?: error("Could not open the selected file for writing.")
+            }.onSuccess {
+                scope.launch { snackbarHostState.showSnackbar("Schedules exported. Upload the JSON file here.") }
+            }.onFailure { error ->
+                scope.launch { snackbarHostState.showSnackbar("Export failed: ${error.message ?: "Unknown error"}") }
+            }
+        }
+    }
+
     val accessibilityEnabled = remember(context, permissionRefreshTick) { context.isAccessibilityServiceEnabled() }
     val batteryUnrestricted = remember(context, permissionRefreshTick) { context.isBatteryUnrestricted() }
     val notificationAccessEnabled = remember(context, permissionRefreshTick) { context.isNotificationListenerEnabled() }
@@ -145,7 +168,7 @@ fun HomeScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(title = { Text("AppBlocker") })
+            TopAppBar(title = { Text("AppBlocker") }, actions = {\n                TextButton(onClick = { exportSchedulesLauncher.launch("AppBlocker-schedules.json") }) {\n                    Text("Export schedules")\n                }\n            })
         },
         snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { padding ->
